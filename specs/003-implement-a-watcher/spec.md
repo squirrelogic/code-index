@@ -5,6 +5,16 @@
 **Status**: Draft
 **Input**: User description: "Implement a watcher that reindexes only changed files (debounced). Add optional Git hooks: post-merge, post-checkout, and post-rewrite to trigger batch refresh. Provide --changed mode that reads the last commit diff. Acceptance: handles create/modify/rename/delete; ignores node_modules, build dirs, and .codeindex."
 
+## Clarifications
+
+### Session 2025-10-12
+
+- Q: When multiple files change during the debounce period, how should the system prioritize processing? → A: Process files in dependency order (imports first)
+- Q: How should the watcher handle symbolic links to files and directories? → A: Follow symlinks but avoid duplicate indexing
+- Q: When the watcher encounters temporary file access errors, how should it recover? → A: Retry with exponential backoff (max 3 attempts)
+- Q: When hundreds of files change simultaneously, what's the maximum batch size to process at once? → A: 100 files
+- Q: What file size threshold should trigger binary file detection to skip content indexing? → A: 10MB
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Real-time File Watching with Automatic Reindexing (Priority: P1)
@@ -77,14 +87,14 @@ A developer wants to customize which files and directories are excluded from wat
 
 ### Edge Cases
 
-- What happens when hundreds of files change simultaneously (e.g., dependency updates)?
-- How does system handle file permission changes that prevent reading?
+- What happens when hundreds of files change simultaneously (e.g., dependency updates)? System processes in batches of 100 files maximum
+- How does system handle file permission changes that prevent reading? System retries with exponential backoff up to 3 times
 - What happens when watcher is started in a directory without write permissions?
-- How does system handle symbolic links and their targets changing?
+- How does system handle symbolic links and their targets changing? System follows symlinks but tracks canonical paths to prevent duplicate indexing when both link and target are watched
 - What happens when disk space is exhausted during reindexing?
 - How does system handle network drives or slow filesystems?
 - What happens when Git repository is in a detached HEAD state?
-- How does system handle binary files or extremely large files?
+- How does system handle binary files or extremely large files? Files over 10MB trigger binary detection; binary files are skipped from content indexing
 
 ## Requirements *(mandatory)*
 
@@ -92,6 +102,8 @@ A developer wants to customize which files and directories are excluded from wat
 
 - **FR-001**: Watcher MUST monitor file system for create, modify, rename, and delete events
 - **FR-002**: Watcher MUST implement debouncing with configurable delay (default 500ms) to batch rapid changes
+- **FR-002a**: When processing batched changes, system MUST process files in dependency order (imports/requires first) to ensure accurate symbol resolution
+- **FR-002b**: System MUST process large change sets in batches of maximum 100 files to prevent memory exhaustion
 - **FR-003**: Watcher MUST ignore changes in node_modules, build directories, and .codeindex by default
 - **FR-004**: Watcher MUST support additional ignore patterns through configuration
 - **FR-005**: CLI MUST provide --changed mode that reads diff from last Git commit
@@ -102,11 +114,13 @@ A developer wants to customize which files and directories are excluded from wat
 - **FR-010**: All reindexing operations MUST be incremental (only changed files)
 - **FR-011**: Watcher MUST provide clear status output showing files being processed
 - **FR-012**: System MUST handle file rename operations as delete plus create
-- **FR-013**: Watcher MUST recover gracefully from temporary file access errors
+- **FR-013**: Watcher MUST recover gracefully from temporary file access errors using exponential backoff (1s, 2s, 4s) with maximum 3 retry attempts before logging warning and continuing
 - **FR-014**: Git hooks MUST fail gracefully if indexer is not available
 - **FR-015**: Debounce delay MUST be configurable through settings
 - **FR-016**: Watcher MUST support pausing and resuming without losing state
 - **FR-017**: System MUST respect .gitignore patterns in addition to explicit ignore patterns
+- **FR-018**: Watcher MUST follow symbolic links but track canonical paths to prevent duplicate indexing
+- **FR-019**: System MUST skip content indexing for files larger than 10MB after binary content detection
 
 ### Key Entities
 
