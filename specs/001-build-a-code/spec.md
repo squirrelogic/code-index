@@ -113,13 +113,22 @@ A developer wants to completely remove code-index from their project. They run t
 - How does system handle concurrent access to the database?
 - What happens when running commands outside a project directory?
 
+## Clarifications
+
+### Session 2025-01-12
+- Q: What programming language/runtime should be used for the CLI? → A: TypeScript/Node.js
+- Q: What should be the npm package name and CLI command? → A: Package: `@squirrelogic/code-index` command: code-index
+- Q: What should be the SQLite database file naming convention? → A: Single file: `.codeindex/index.db`
+- Q: What format should the MCP launcher use? → A: Create .mcp.json configuration file instead of launcher script
+- Q: What log file format should be used? → A: JSON lines format (.jsonl) in .codeindex/logs/
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: CLI MUST provide init command to bootstrap project with .codeindex/ directory containing SQLite database and logs
+- **FR-001**: CLI MUST provide init command to bootstrap project with .codeindex/ directory containing SQLite database (index.db) and logs directory with .jsonl files
 - **FR-002**: CLI MUST provide init command to create .claude/ directory with settings, hooks, and tools configurations
-- **FR-003**: CLI MUST generate a local MCP launcher script during initialization
+- **FR-003**: CLI MUST generate a .mcp.json configuration file at project root during initialization
 - **FR-004**: CLI MUST provide index command to scan and index all project files into SQLite database
 - **FR-005**: CLI MUST respect .gitignore patterns when indexing files
 - **FR-006**: CLI MUST provide search command supporting text search, regex patterns, and code-aware queries
@@ -134,13 +143,16 @@ A developer wants to completely remove code-index from their project. They run t
 - **FR-015**: CLI MUST support both human-readable and JSON output formats
 - **FR-016**: CLI MUST handle interruption signals gracefully (SIGINT, SIGTERM)
 - **FR-017**: Index MUST support all text files initially, with progressive language-specific enhancements for top 5 languages (JavaScript/TypeScript, Python, Go, Java, C/C++)
+- **FR-018**: CLI MUST be implemented in TypeScript/Node.js for cross-platform compatibility and npm distribution
+- **FR-019**: CLI MUST be distributed as npm package `@squirrelogic/code-index` with command name `code-index`
+- **FR-020**: Init command MUST add `.codeindex/logs/*` to .gitignore file if not already present
 
 ### Key Entities
 
 - **Project Configuration**: Represents initialization settings including database location, index preferences, ignored patterns
 - **Code Index Entry**: Represents indexed file with path, content hash, modification time, language type, and extracted metadata
 - **Search Result**: Represents matched code location with file path, line numbers, relevance score, and context snippet
-- **MCP Launcher**: Represents generated script for launching Model Context Protocol tools locally
+- **MCP Configuration**: Represents .mcp.json file defining Model Context Protocol server settings for project-wide tool access
 - **Health Check Result**: Represents diagnostic information including database status, file permissions, configuration validity
 
 ## Success Criteria *(mandatory)*
