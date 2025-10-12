@@ -1,0 +1,279 @@
+openapi: 3.0.0
+info:
+  title: Claude Code Hooks CLI Interface
+  version: 1.0.0
+  description: Command-line interface contract for Claude Code hooks and installers
+
+paths:
+  /installers/install:
+    post:
+      summary: Install Claude Code hooks
+      operationId: installHooks
+      description: |
+        Installs Claude Code hooks for the code-index CLI tool.
+        Automatically detects OS and creates appropriate hook scripts.
+      parameters:
+        - name: force
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Overwrite existing hooks if present
+        - name: skip-cli-check
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Skip checking for code-index CLI availability
+        - name: project-dir
+          in: query
+          schema:
+            type: string
+          description: Override project directory (defaults to current directory)
+      responses:
+        '0':
+          description: Installation successful
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  ✓ Detected OS: macOS
+                  ✓ Created .claude/hooks/ directory
+                  ✓ Installed PreToolUse hook
+                  ✓ Installed PostToolUse hook
+                  ✓ Installed SessionStart hook
+                  ✓ Set executable permissions
+                  ✓ Registered hooks in settings.json
+                  ✓ Created default policies.json
+
+                  Installation complete! Hooks are ready to use.
+        '1':
+          description: Installation failed
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ERROR: Failed to create .claude directory: Permission denied"
+
+  /installers/uninstall:
+    post:
+      summary: Uninstall Claude Code hooks
+      operationId: uninstallHooks
+      description: Removes all Claude Code hook files and configurations
+      parameters:
+        - name: keep-policies
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Preserve policies.json file
+        - name: keep-logs
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Preserve log files
+      responses:
+        '0':
+          description: Uninstall successful
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  ✓ Removed PreToolUse hook
+                  ✓ Removed PostToolUse hook
+                  ✓ Removed SessionStart hook
+                  ✓ Cleaned settings.json
+                  ✓ Removed .claude/hooks/ directory
+
+                  Uninstall complete.
+        '1':
+          description: Uninstall failed
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ERROR: No hooks installed"
+
+components:
+  schemas:
+    HookEvent:
+      type: object
+      required:
+        - session_id
+        - transcript_path
+        - cwd
+        - hook_event_name
+      properties:
+        session_id:
+          type: string
+          description: Unique session identifier
+          example: "abc123-def456"
+        transcript_path:
+          type: string
+          description: Path to session transcript file
+          example: "/Users/user/.claude/projects/myproject/session.jsonl"
+        cwd:
+          type: string
+          description: Current working directory
+          example: "/Users/user/projects/myproject"
+        hook_event_name:
+          type: string
+          enum:
+            - PreToolUse
+            - PostToolUse
+            - SessionStart
+            - UserPromptSubmit
+            - Stop
+            - Notification
+            - SubagentStop
+            - PreCompact
+            - SessionEnd
+          description: Type of hook event
+        tool_name:
+          type: string
+          description: Name of tool being invoked (PreToolUse, PostToolUse only)
+          example: "Bash"
+        tool_input:
+          type: object
+          description: Tool input parameters
+          additionalProperties: true
+          example:
+            command: "ls -la"
+            description: "List files"
+        tool_response:
+          type: object
+          description: Tool execution result (PostToolUse only)
+          properties:
+            success:
+              type: boolean
+            filePath:
+              type: string
+            output:
+              type: string
+            error:
+              type: string
+        source:
+          type: string
+          enum:
+            - startup
+            - resume
+            - clear
+            - compact
+          description: Session start source (SessionStart only)
+        prompt:
+          type: string
+          description: User prompt text (UserPromptSubmit only)
+        message:
+          type: string
+          description: Notification message (Notification only)
+
+    HookResponse:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+            - allow
+            - deny
+            - ask
+            - block
+          description: Hook decision
+        reason:
+          type: string
+          description: Explanation for decision
+        continue:
+          type: boolean
+          description: Whether to continue processing
+        suppressOutput:
+          type: boolean
+          description: Suppress output to Claude
+        hookSpecificOutput:
+          type: object
+          properties:
+            hookEventName:
+              type: string
+            permissionDecision:
+              type: string
+              enum:
+                - allow
+                - deny
+                - ask
+            permissionDecisionReason:
+              type: string
+            additionalContext:
+              type: string
+
+    PolicyRule:
+      type: object
+      required:
+        - id
+        - name
+        - enabled
+        - action
+      properties:
+        id:
+          type: string
+          description: Unique rule identifier
+          example: "rule-001"
+        name:
+          type: string
+          description: Human-readable rule name
+          example: "Block sudo commands"
+        description:
+          type: string
+          description: Rule description
+        enabled:
+          type: boolean
+          description: Whether rule is active
+        tools:
+          type: array
+          items:
+            type: string
+          description: Tool names to match
+          example: ["Bash", "Write"]
+        patterns:
+          type: array
+          items:
+            type: string
+          description: Regex patterns to match
+          example: ["sudo.*", "rm -rf"]
+        paths:
+          type: array
+          items:
+            type: string
+          description: File paths to check
+          example: ["/etc/", "/usr/bin/"]
+        action:
+          type: string
+          enum:
+            - allow
+            - deny
+            - warn
+          description: Action to take
+        message:
+          type: string
+          description: Custom message for denial
+        severity:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+            - critical
+          description: Rule severity level
+
+    ExitCodes:
+      type: object
+      properties:
+        '0':
+          type: string
+          description: Success or benign failure (fail-open)
+        '2':
+          type: string
+          description: Critical failure, block operation
+        other:
+          type: string
+          description: Non-critical error, show warning and continue

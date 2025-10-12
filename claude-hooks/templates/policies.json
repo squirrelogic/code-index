@@ -1,0 +1,166 @@
+{
+  "version": "1.0.0",
+  "description": "Default security policies for Claude Code hooks",
+  "rules": [
+    {
+      "id": "block-sudo",
+      "description": "Block commands requiring elevated privileges",
+      "enabled": true,
+      "tool": "Bash",
+      "patterns": [
+        "^sudo\\s+",
+        "^doas\\s+",
+        "^su\\s+"
+      ],
+      "action": "block",
+      "message": "Commands requiring elevated privileges are not allowed"
+    },
+    {
+      "id": "protect-sensitive-files",
+      "description": "Protect sensitive configuration files",
+      "enabled": true,
+      "tools": ["Write", "Edit", "MultiEdit"],
+      "paths": [
+        ".env",
+        ".env.local",
+        ".env.production",
+        "**/*.pem",
+        "**/*.key",
+        "**/*.pfx",
+        "**/id_rsa*",
+        "**/id_dsa*",
+        "**/id_ecdsa*",
+        "**/id_ed25519*",
+        "**/.ssh/config",
+        "**/.aws/credentials",
+        "**/.aws/config",
+        "**/.docker/config.json",
+        "**/.npmrc",
+        "**/.pypirc",
+        "**/.netrc",
+        "**/.gitconfig",
+        "**/credentials.json",
+        "**/service-account*.json"
+      ],
+      "action": "warn",
+      "message": "Modifying sensitive files requires confirmation"
+    },
+    {
+      "id": "block-dangerous-commands",
+      "description": "Block potentially destructive commands",
+      "enabled": true,
+      "tool": "Bash",
+      "patterns": [
+        "rm\\s+-rf\\s+/",
+        "rm\\s+-rf\\s+~",
+        "format\\s+",
+        "mkfs\\.",
+        "dd\\s+if=.*of=/dev/",
+        ":(){ :|:& };:",
+        ">\\s*/dev/sda"
+      ],
+      "action": "block",
+      "message": "Potentially destructive command blocked"
+    },
+    {
+      "id": "warn-package-install",
+      "description": "Warn on package installation commands",
+      "enabled": true,
+      "tool": "Bash",
+      "patterns": [
+        "^npm\\s+install",
+        "^npm\\s+i\\s+",
+        "^yarn\\s+add",
+        "^pip\\s+install",
+        "^pipx\\s+install",
+        "^gem\\s+install",
+        "^cargo\\s+install",
+        "^go\\s+get",
+        "^brew\\s+install",
+        "^apt-get\\s+install",
+        "^apt\\s+install",
+        "^yum\\s+install",
+        "^dnf\\s+install",
+        "^pacman\\s+-S"
+      ],
+      "action": "warn",
+      "message": "Package installation detected - reviewing dependencies"
+    },
+    {
+      "id": "block-network-tools",
+      "description": "Block network scanning and exploitation tools",
+      "enabled": true,
+      "tool": "Bash",
+      "patterns": [
+        "^nmap\\s+",
+        "^masscan\\s+",
+        "^nikto\\s+",
+        "^metasploit",
+        "^msfconsole",
+        "^sqlmap\\s+",
+        "^hydra\\s+",
+        "^aircrack",
+        "^john\\s+",
+        "^hashcat\\s+"
+      ],
+      "action": "block",
+      "message": "Network scanning and exploitation tools are not allowed"
+    },
+    {
+      "id": "protect-system-dirs",
+      "description": "Protect system directories from modification",
+      "enabled": true,
+      "tools": ["Write", "Edit", "MultiEdit", "Bash"],
+      "paths": [
+        "/etc/**",
+        "/usr/**",
+        "/bin/**",
+        "/sbin/**",
+        "/boot/**",
+        "/lib/**",
+        "/lib64/**",
+        "/System/**",
+        "/Library/**",
+        "C:\\Windows\\**",
+        "C:\\Program Files\\**",
+        "C:\\Program Files (x86)\\**"
+      ],
+      "action": "block",
+      "message": "Modifying system directories is not allowed"
+    },
+    {
+      "id": "warn-git-operations",
+      "description": "Warn on potentially dangerous git operations",
+      "enabled": true,
+      "tool": "Bash",
+      "patterns": [
+        "git\\s+push\\s+.*--force",
+        "git\\s+push\\s+.*-f\\s+",
+        "git\\s+reset\\s+--hard",
+        "git\\s+clean\\s+-[xX]?[df]+",
+        "git\\s+filter-branch"
+      ],
+      "action": "warn",
+      "message": "Potentially dangerous git operation - proceed with caution"
+    }
+  ],
+  "allowlist": {
+    "description": "Patterns that bypass policy checks",
+    "patterns": [
+      "**/.claude/hooks/**",
+      "**/.codeindex/**",
+      "**/test/**",
+      "**/tests/**",
+      "**/__tests__/**",
+      "**/spec/**",
+      "**/tmp/**",
+      "**/temp/**"
+    ]
+  },
+  "settings": {
+    "fail_open": true,
+    "log_decisions": true,
+    "cache_ttl_seconds": 300,
+    "max_pattern_checks": 100
+  }
+}

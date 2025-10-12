@@ -1,0 +1,55 @@
+{
+  "version": "1.0.0",
+  "description": "Claude Code hooks configuration for code-index integration",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "description": "Policy enforcement hook - validates tool usage against project policies",
+        "matcher": "Write|Edit|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/pre-tool-use.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "description": "Index refresh hook - updates code index after file modifications",
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/post-tool-use.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "description": "Cache warming hook - preloads index and prepares environment",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/session-start.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "config": {
+    "log_level": "INFO",
+    "log_directory": ".codeindex/logs",
+    "fail_open": true,
+    "enabled": true
+  },
+  "metadata": {
+    "installed_by": "code-index-hooks-installer",
+    "installed_at": "",
+    "last_updated": ""
+  }
+}
