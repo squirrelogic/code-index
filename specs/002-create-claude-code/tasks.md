@@ -20,23 +20,23 @@ Implementation tasks for Claude Code hooks and installers, organized by user sto
 
 Initial project structure and shared utilities needed by all user stories.
 
-- **T001** [P]: Create project directory structure `claude-hooks/` with subdirectories
+- **T001** [P] ✅: Create project directory structure `claude-hooks/` with subdirectories
   - File: `claude-hooks/` (new directory structure)
   - Creates: installers/, hooks/unix/, hooks/windows/, templates/, lib/unix/, lib/windows/
 
-- **T002** [P]: Create shared bash utility library with common functions
+- **T002** [P] ✅: Create shared bash utility library with common functions
   - File: `claude-hooks/lib/unix/common.sh` (new)
   - Functions: log_info, log_error, check_cli_available, acquire_lock, release_lock, parse_json
 
-- **T003** [P]: Create shared PowerShell utility module with common functions
+- **T003** [P] ✅: Create shared PowerShell utility module with common functions
   - File: `claude-hooks/lib/windows/Common.ps1` (new)
   - Functions: Write-LogInfo, Write-LogError, Test-CliAvailable, Get-FileLock, ConvertFrom-JsonSafe
 
-- **T004** [P]: Create default policies configuration template
+- **T004** [P] ✅: Create default policies configuration template
   - File: `claude-hooks/templates/policies.json` (new)
   - Content: Default rules for sudo blocking, sensitive file protection
 
-- **T005** [P]: Create hook settings template for .claude/settings.json
+- **T005** [P] ✅: Create hook settings template for .claude/settings.json
   - File: `claude-hooks/templates/settings.json` (new)
   - Content: Hook registration configuration for all three hook types
 
@@ -46,19 +46,19 @@ Initial project structure and shared utilities needed by all user stories.
 
 Core components that must exist before any user story can be implemented.
 
-- **T006**: Implement OS detection logic for installers
+- **T006** ✅: Implement OS detection logic for installers
   - File: `claude-hooks/lib/unix/common.sh` (update)
   - Function: detect_os() returning "macos", "linux", or error
 
-- **T007**: Implement project root detection logic
+- **T007** ✅: Implement project root detection logic
   - File: `claude-hooks/lib/unix/common.sh` (update)
   - Function: find_project_root() using git or .claude directory
 
-- **T008**: Implement JSON parsing wrapper for bash
+- **T008** ✅: Implement JSON parsing wrapper for bash
   - File: `claude-hooks/lib/unix/common.sh` (update)
   - Function: parse_hook_event() using jq with error handling
 
-- **T009**: Implement JSON parsing wrapper for PowerShell
+- **T009** ✅: Implement JSON parsing wrapper for PowerShell
   - File: `claude-hooks/lib/windows/Common.ps1` (update)
   - Function: Parse-HookEvent using ConvertFrom-Json with error handling
 
@@ -69,47 +69,47 @@ Core components that must exist before any user story can be implemented.
 **Goal**: Enable cross-platform installation of Claude Code hooks
 **Independent Test**: Run installer on each OS, verify files created with correct permissions
 
-- **T010**: Create bash installer script main structure
+- **T010** ✅: Create bash installer script main structure
   - File: `claude-hooks/installers/install.sh` (new)
   - Story: US1
   - Implements: OS detection, argument parsing, main installation flow
 
-- **T011**: Implement directory creation logic in bash installer
+- **T011** ✅: Implement directory creation logic in bash installer
   - File: `claude-hooks/installers/install.sh` (update)
   - Story: US1
   - Creates: .claude/hooks/, .codeindex/logs/ with proper permissions
 
-- **T012** [P]: Create PowerShell installer script main structure
+- **T012** ✅ [P]: Create PowerShell installer script main structure
   - File: `claude-hooks/installers/install.ps1` (new)
   - Story: US1
   - Implements: OS verification, parameter parsing, main installation flow
 
-- **T013**: Implement directory creation logic in PowerShell installer
+- **T013** ✅: Implement directory creation logic in PowerShell installer
   - File: `claude-hooks/installers/install.ps1` (update)
   - Story: US1
   - Creates: .claude/hooks/, .codeindex/logs/ with proper permissions
 
-- **T014**: Add hook file copying logic to bash installer
+- **T014** ✅: Add hook file copying logic to bash installer
   - File: `claude-hooks/installers/install.sh` (update)
   - Story: US1
   - Copies: Hook scripts from source to .claude/hooks/, sets chmod +x
 
-- **T015**: Add hook file copying logic to PowerShell installer
+- **T015** ✅: Add hook file copying logic to PowerShell installer
   - File: `claude-hooks/installers/install.ps1` (update)
   - Story: US1
   - Copies: Hook scripts from source to .claude/hooks/
 
-- **T016**: Implement settings.json registration in bash installer
+- **T016** ✅: Implement settings.json registration in bash installer
   - File: `claude-hooks/installers/install.sh` (update)
   - Story: US1
   - Updates: .claude/settings.json with hook registrations
 
-- **T017**: Implement settings.json registration in PowerShell installer
+- **T017** ✅: Implement settings.json registration in PowerShell installer
   - File: `claude-hooks/installers/install.ps1` (update)
   - Story: US1
   - Updates: .claude/settings.json with hook registrations
 
-- **T018** [P]: Add installation verification and output formatting
+- **T018** ✅ [P]: Add installation verification and output formatting
   - File: `claude-hooks/installers/install.sh` (update)
   - Story: US1
   - Verifies: All files created, provides user feedback
@@ -121,37 +121,37 @@ Core components that must exist before any user story can be implemented.
 **Goal**: Enforce project-specific policies before tool execution
 **Independent Test**: Trigger tool use, verify policy enforcement and fail-open behavior
 
-- **T019** [P]: Create PreToolUse hook for Unix systems
+- **T019** ✅ [P]: Create PreToolUse hook for Unix systems
   - File: `claude-hooks/hooks/unix/pre-tool-use.sh` (new)
   - Story: US2
   - Implements: Main hook structure, JSON input parsing, exit codes
 
-- **T020** [P]: Create PreToolUse hook for Windows systems
+- **T020** ✅ [P]: Create PreToolUse hook for Windows systems
   - File: `claude-hooks/hooks/windows/pre-tool-use.ps1` (new)
   - Story: US2
   - Implements: Main hook structure, JSON input parsing, exit codes
 
-- **T021**: Implement policy loading and parsing in bash PreToolUse
+- **T021** ✅: Implement policy loading and parsing in bash PreToolUse
   - File: `claude-hooks/hooks/unix/pre-tool-use.sh` (update)
   - Story: US2
   - Loads: .claude/policies.json, parses rules
 
-- **T022**: Implement policy loading and parsing in PowerShell PreToolUse
+- **T022** ✅: Implement policy loading and parsing in PowerShell PreToolUse
   - File: `claude-hooks/hooks/windows/pre-tool-use.ps1` (update)
   - Story: US2
   - Loads: .claude/policies.json, parses rules
 
-- **T023**: Add policy evaluation logic for bash PreToolUse
+- **T023** ✅: Add policy evaluation logic for bash PreToolUse
   - File: `claude-hooks/hooks/unix/pre-tool-use.sh` (update)
   - Story: US2
   - Evaluates: Tool name, patterns, paths against rules
 
-- **T024**: Add policy evaluation logic for PowerShell PreToolUse
+- **T024** ✅: Add policy evaluation logic for PowerShell PreToolUse
   - File: `claude-hooks/hooks/windows/pre-tool-use.ps1` (update)
   - Story: US2
   - Evaluates: Tool name, patterns, paths against rules
 
-- **T025**: Implement fail-open behavior and logging
+- **T025** ✅: Implement fail-open behavior and logging
   - File: `claude-hooks/hooks/unix/pre-tool-use.sh` (update)
   - Story: US2
   - Ensures: Exit 0 on errors, logs to .codeindex/logs/
@@ -163,32 +163,32 @@ Core components that must exist before any user story can be implemented.
 **Goal**: Automatically refresh code index after file modifications
 **Independent Test**: Modify files via Claude Code, verify index updates
 
-- **T026** [P]: Create PostToolUse hook for Unix systems
+- **T026** ✅ [P]: Create PostToolUse hook for Unix systems
   - File: `claude-hooks/hooks/unix/post-tool-use.sh` (new)
   - Story: US3
   - Implements: Event parsing, tool detection logic
 
-- **T027** [P]: Create PostToolUse hook for Windows systems
+- **T027** ✅ [P]: Create PostToolUse hook for Windows systems
   - File: `claude-hooks/hooks/windows/post-tool-use.ps1` (new)
   - Story: US3
   - Implements: Event parsing, tool detection logic
 
-- **T028**: Add file change detection logic for bash PostToolUse
+- **T028** ✅: Add file change detection logic for bash PostToolUse
   - File: `claude-hooks/hooks/unix/post-tool-use.sh` (update)
   - Story: US3
   - Parses: tool_response for modified files
 
-- **T029**: Add file change detection logic for PowerShell PostToolUse
+- **T029** ✅: Add file change detection logic for PowerShell PostToolUse
   - File: `claude-hooks/hooks/windows/post-tool-use.ps1` (update)
   - Story: US3
   - Parses: tool_response for modified files
 
-- **T030**: Implement index refresh trigger with file locking
+- **T030** ✅: Implement index refresh trigger with file locking
   - File: `claude-hooks/hooks/unix/post-tool-use.sh` (update)
   - Story: US3
   - Executes: code-index refresh with flock for safety
 
-- **T031**: Implement index refresh trigger with mutex locking
+- **T031** ✅: Implement index refresh trigger with mutex locking
   - File: `claude-hooks/hooks/windows/post-tool-use.ps1` (update)
   - Story: US3
   - Executes: code-index refresh with mutex for safety
@@ -200,22 +200,22 @@ Core components that must exist before any user story can be implemented.
 **Goal**: Optimize initial performance by warming caches
 **Independent Test**: Start new Claude Code session, measure performance improvement
 
-- **T032** [P]: Create SessionStart hook for Unix systems
+- **T032** ✅ [P]: Create SessionStart hook for Unix systems
   - File: `claude-hooks/hooks/unix/session-start.sh` (new)
   - Story: US4
   - Implements: Session detection, output formatting
 
-- **T033** [P]: Create SessionStart hook for Windows systems
+- **T033** ✅ [P]: Create SessionStart hook for Windows systems
   - File: `claude-hooks/hooks/windows/session-start.ps1` (new)
   - Story: US4
   - Implements: Session detection, output formatting
 
-- **T034**: Add cache warming logic for bash SessionStart
+- **T034** ✅: Add cache warming logic for bash SessionStart
   - File: `claude-hooks/hooks/unix/session-start.sh` (update)
   - Story: US4
   - Warms: Index statistics, frequent queries
 
-- **T035**: Add system health check to SessionStart hooks
+- **T035** ✅: Add system health check to SessionStart hooks
   - File: `claude-hooks/hooks/unix/session-start.sh` (update)
   - Story: US4
   - Checks: CLI availability, disk space, index health
@@ -227,12 +227,12 @@ Core components that must exist before any user story can be implemented.
 **Goal**: Clean removal of all hook components
 **Independent Test**: Run uninstaller, verify complete removal
 
-- **T036** [P]: Create bash uninstaller script
+- **T036** ✅ [P]: Create bash uninstaller script
   - File: `claude-hooks/installers/uninstall.sh` (new)
   - Story: US5
   - Removes: Hook files, cleans settings.json
 
-- **T037** [P]: Create PowerShell uninstaller script
+- **T037** ✅ [P]: Create PowerShell uninstaller script
   - File: `claude-hooks/installers/uninstall.ps1` (new)
   - Story: US5
   - Removes: Hook files, cleans settings.json
@@ -243,7 +243,7 @@ Core components that must exist before any user story can be implemented.
 
 Cross-cutting improvements and documentation.
 
-- **T038**: Create comprehensive README with examples
+- **T038** ✅: Create comprehensive README with examples
   - File: `claude-hooks/README.md` (new)
   - Content: Installation, configuration, troubleshooting guide
 
