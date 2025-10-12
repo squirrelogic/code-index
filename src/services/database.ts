@@ -214,6 +214,16 @@ export class DatabaseService {
     this.statements.set('getModifiedAfter', this.db.prepare(`
       SELECT * FROM code_entries WHERE file_modified_at > ? ORDER BY path
     `));
+
+    // Get all entry paths with modification times for change detection
+    this.statements.set('getPathsWithModTime', this.db.prepare(`
+      SELECT path, file_modified_at, content_hash FROM code_entries ORDER BY path
+    `));
+
+    // Delete multiple entries by paths
+    this.statements.set('deleteMultipleByPaths', this.db.prepare(`
+      DELETE FROM code_entries WHERE path IN (SELECT value FROM json_each(?))
+    `));
   }
 
   /**
@@ -450,6 +460,38 @@ export class DatabaseService {
   }
 
   /**
+   * Gets all entry paths with their modification times for change detection
+   */
+  getPathsWithModificationTimes(): Map<string, { modifiedAt: Date; hash: string }> {
+    const stmt = this.statements.get('getPathsWithModTime');
+    if (!stmt) throw new Error('Statement not prepared');
+
+    const rows = stmt.all() as any[];
+    const pathMap = new Map<string, { modifiedAt: Date; hash: string }>();
+
+    for (const row of rows) {
+      pathMap.set(row.path, {
+        modifiedAt: new Date(row.file_modified_at),
+        hash: row.content_hash
+      });
+    }
+
+    return pathMap;
+  }
+
+  /**
+   * Deletes multiple entries by their paths
+   */
+  deleteMultipleEntries(paths: string[]): void {
+    if (paths.length === 0) return;
+
+    const stmt = this.statements.get('deleteMultipleByPaths');
+    if (!stmt) throw new Error('Statement not prepared');
+
+    stmt.run(JSON.stringify(paths));
+  }
+
+  /**
    * Performs full-text search
    */
   searchText(query: string, limit: number = 100): any[] {
@@ -478,6 +520,91 @@ export class DatabaseService {
 
     const result = this.db.pragma('integrity_check') as any;
     return Array.isArray(result) && result[0]?.integrity_check === 'ok';
+  }
+
+  /**
+   * Performs comprehensive database health check
+   */
+  performHealthCheck(): {
+    isHealthy: boolean;
+    issues: string[];
+    stats: {
+      totalEntries: number;
+      databaseSize: number;
+      walSize: number;
+      lastModified: Date | null;
+    };
+  } {
+    if (!this.db) throw new Error('Database not connected');
+
+    const issues: string[] = [];
+    let isHealthy = true;
+
+    // Check integrity
+    if (!this.checkIntegrity()) {
+      issues.push('Database integrity check failed');
+      isHealthy = false;
+    }
+
+    // Check schema
+    try {
+      const tables = this.db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+      ).all() as any[];
+
+      const requiredTables = ['project_config', 'code_entries', 'code_search'];
+      const existingTables = tables.map(t => t.name);
+
+      for (const table of requiredTables) {
+        if (!existingTables.includes(table)) {
+          issues.push(`Required table '${table}' is missing`);
+          isHealthy = false;
+        }
+      }
+    } catch (error) {
+      issues.push(`Schema validation failed: ${error}`);
+      isHealthy = false;
+    }
+
+    // Get database statistics
+    const stats = {
+      totalEntries: this.getEntryCount(),
+      databaseSize: this.getDatabaseSize(),
+      walSize: this.getWalSize(),
+      lastModified: this.getLastModifiedTime()
+    };
+
+    // Check for potential issues
+    if (stats.walSize > 10 * 1024 * 1024) { // WAL > 10MB
+      issues.push('WAL file is large, consider running VACUUM');
+    }
+
+    if (stats.databaseSize > 500 * 1024 * 1024) { // DB > 500MB
+      issues.push('Database is large, consider optimizing');
+    }
+
+    return { isHealthy, issues, stats };
+  }
+
+  /**
+   * Gets WAL file size in bytes
+   */
+  private getWalSize(): number {
+    const walPath = this.dbPath + '-wal';
+    if (!existsSync(walPath)) return 0;
+
+    const stats = statSync(walPath);
+    return stats.size;
+  }
+
+  /**
+   * Gets last modification time of database
+   */
+  private getLastModifiedTime(): Date | null {
+    if (!existsSync(this.dbPath)) return null;
+
+    const stats = statSync(this.dbPath);
+    return stats.mtime;
   }
 
   /**

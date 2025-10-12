@@ -20,6 +20,12 @@ export interface IndexResult {
   errors: string[];
 }
 
+export interface RefreshResult extends IndexResult {
+  filesUpdated: number;
+  filesAdded: number;
+  filesDeleted: number;
+}
+
 export class IndexerService {
   private database: DatabaseService;
   private gitignore: GitignoreService;
@@ -296,5 +302,151 @@ export class IndexerService {
     }
 
     return false;
+  }
+
+  /**
+   * Refresh the index by updating only changed files
+   */
+  public async refreshIndex(options: IndexOptions = {}): Promise<RefreshResult> {
+    const startTime = Date.now();
+    this.batchSize = options.batchSize || 100;
+
+    // Reset stats with additional refresh-specific counters
+    const refreshStats = {
+      filesIndexed: 0,
+      filesSkipped: 0,
+      filesUpdated: 0,
+      filesAdded: 0,
+      filesDeleted: 0,
+      errors: [] as string[]
+    };
+
+    // Get existing files from database
+    const existingFiles = this.database.getPathsWithModificationTimes();
+    const currentFiles = new Set<string>();
+
+    // Scan filesystem and collect current files
+    await this.scanForRefresh(this.rootPath, existingFiles, currentFiles, refreshStats, options);
+
+    // Process any remaining files in the batch
+    if (this.currentBatch.length > 0) {
+      await this.processBatch();
+    }
+
+    // Find and remove deleted files
+    const deletedPaths: string[] = [];
+    for (const [path] of existingFiles) {
+      if (!currentFiles.has(path)) {
+        deletedPaths.push(path);
+        refreshStats.filesDeleted++;
+      }
+    }
+
+    if (deletedPaths.length > 0) {
+      this.database.deleteMultipleEntries(deletedPaths);
+      this.logger.info('files-deleted', { count: deletedPaths.length });
+    }
+
+    const totalTime = Date.now() - startTime;
+    const filesPerSecond = refreshStats.filesIndexed > 0
+      ? (refreshStats.filesIndexed / (totalTime / 1000))
+      : 0;
+
+    return {
+      filesIndexed: refreshStats.filesIndexed,
+      filesSkipped: refreshStats.filesSkipped,
+      filesUpdated: refreshStats.filesUpdated,
+      filesAdded: refreshStats.filesAdded,
+      filesDeleted: refreshStats.filesDeleted,
+      totalTime,
+      filesPerSecond,
+      errors: refreshStats.errors
+    };
+  }
+
+  /**
+   * Scan directory for refresh operation
+   */
+  private async scanForRefresh(
+    dirPath: string,
+    existingFiles: Map<string, { modifiedAt: Date; hash: string }>,
+    currentFiles: Set<string>,
+    stats: any,
+    options: IndexOptions
+  ): Promise<void> {
+    try {
+      const entries = readdirSync(dirPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        const relativePath = path.relative(this.rootPath, fullPath);
+
+        // Check if path should be ignored
+        if (this.gitignore.isIgnored(relativePath)) {
+          stats.filesSkipped++;
+          continue;
+        }
+
+        if (entry.isDirectory()) {
+          // Recursively scan subdirectory
+          await this.scanForRefresh(fullPath, existingFiles, currentFiles, stats, options);
+        } else if (entry.isFile()) {
+          currentFiles.add(relativePath);
+
+          // Check if file needs updating
+          const existingEntry = existingFiles.get(relativePath);
+          const fileStat = statSync(fullPath);
+
+          if (!existingEntry) {
+            // New file - add it
+            await this.indexFile(fullPath, relativePath, options);
+            stats.filesAdded++;
+            stats.filesIndexed++;
+          } else if (fileStat.mtime > existingEntry.modifiedAt) {
+            // Modified file - check if content actually changed
+            const content = readFileSync(fullPath, 'utf-8');
+            const hash = createHash('sha256').update(content).digest('hex');
+
+            if (hash !== existingEntry.hash) {
+              // Content changed - update it
+              await this.indexFile(fullPath, relativePath, options);
+              stats.filesUpdated++;
+              stats.filesIndexed++;
+            } else {
+              // Only timestamp changed, skip
+              stats.filesSkipped++;
+            }
+          } else {
+            // File unchanged
+            stats.filesSkipped++;
+          }
+        } else if (entry.isSymbolicLink() && options.followSymlinks) {
+          // Handle symlinks if option is enabled
+          try {
+            const symlinkStat = statSync(fullPath);
+            if (symlinkStat.isDirectory()) {
+              await this.scanForRefresh(fullPath, existingFiles, currentFiles, stats, options);
+            } else if (symlinkStat.isFile()) {
+              currentFiles.add(relativePath);
+              // Check if symlink target needs updating
+              const existingEntry = existingFiles.get(relativePath);
+              if (!existingEntry || symlinkStat.mtime > existingEntry.modifiedAt) {
+                await this.indexFile(fullPath, relativePath, options);
+                stats.filesIndexed++;
+                stats.filesUpdated++;
+              } else {
+                stats.filesSkipped++;
+              }
+            }
+          } catch (error) {
+            // Skip broken symlinks
+            stats.filesSkipped++;
+          }
+        }
+      }
+    } catch (error) {
+      stats.errors.push(`Error scanning directory ${dirPath}: ${error}`);
+      this.logger.error('scan-directory-error', { dirPath, error: String(error) });
+    }
   }
 }

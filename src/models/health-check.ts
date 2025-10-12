@@ -176,15 +176,22 @@ export function createIssue(
 /**
  * Common fix suggestions
  */
-export const FIX_SUGGESTIONS = {
+export const FIX_SUGGESTIONS: Partial<Record<IssueCode, string>> = {
   [IssueCode.DB_NOT_FOUND]: 'Run "code-index init" to initialize the database',
   [IssueCode.DB_CORRUPTED]: 'Run "code-index init --force" to reinitialize',
+  [IssueCode.DB_VERSION_MISMATCH]: 'Run "code-index init --force" to reinitialize with current version',
+  [IssueCode.DB_LOCKED]: 'Ensure no other processes are accessing the database',
   [IssueCode.DB_PERMISSION_DENIED]: 'Check file permissions for .codeindex/index.db',
   [IssueCode.DIR_NOT_FOUND]: 'Run "code-index init" to create required directories',
   [IssueCode.DIR_PERMISSION_DENIED]: 'Check directory permissions for .codeindex/',
+  [IssueCode.DIR_NOT_WRITABLE]: 'Check write permissions for .codeindex/',
+  [IssueCode.CONFIG_INVALID]: 'Fix configuration issues or run "code-index init --force"',
   [IssueCode.CONFIG_MISSING]: 'Run "code-index init" to create configuration',
+  [IssueCode.CONFIG_VERSION_MISMATCH]: 'Run "code-index init --force" to update configuration',
   [IssueCode.INDEX_OUTDATED]: 'Run "code-index refresh" to update the index',
   [IssueCode.INDEX_EMPTY]: 'Run "code-index index" to build the index',
+  [IssueCode.INDEX_CORRUPTED]: 'Run "code-index index --force" to rebuild the index',
   [IssueCode.DISK_SPACE_LOW]: 'Free up disk space (at least 100MB required)',
+  [IssueCode.MEMORY_LOW]: 'Close other applications to free up memory',
   [IssueCode.NODE_VERSION_UNSUPPORTED]: 'Update Node.js to version 20 or higher'
 };

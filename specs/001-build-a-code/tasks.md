@@ -126,12 +126,12 @@
 
 ### Implementation for User Story 4
 
-- [ ] T045 [US4] Implement file modification time tracking in src/services/database.ts
-- [ ] T046 [US4] Add change detection logic in src/services/indexer.ts
-- [ ] T047 [US4] Implement refresh command in src/cli/commands/refresh.ts
-- [ ] T048 [US4] Handle deleted files removal from index
-- [ ] T049 [US4] Add incremental update with minimal database writes
-- [ ] T050 [US4] Report statistics (files updated/added/removed)
+- [X] T045 [US4] Implement file modification time tracking in src/services/database.ts
+- [X] T046 [US4] Add change detection logic in src/services/indexer.ts
+- [X] T047 [US4] Implement refresh command in src/cli/commands/refresh.ts
+- [X] T048 [US4] Handle deleted files removal from index
+- [X] T049 [US4] Add incremental update with minimal database writes
+- [X] T050 [US4] Report statistics (files updated/added/removed)
 
 **Checkpoint**: User Story 4 complete - incremental updates work
 
@@ -145,14 +145,14 @@
 
 ### Implementation for User Story 5
 
-- [ ] T051 [US5] Implement database integrity check in src/services/database.ts
-- [ ] T052 [US5] Add file permission verification logic
-- [ ] T053 [US5] Implement configuration validation checks
-- [ ] T054 [US5] Create doctor command in src/cli/commands/doctor.ts
-- [ ] T055 [US5] Add issue detection and severity classification
-- [ ] T056 [US5] Implement suggestion generation for common issues
-- [ ] T057 [US5] Add --fix flag for automatic repair attempts
-- [ ] T058 [US5] Format health report for human and JSON output
+- [X] T051 [US5] Implement database integrity check in src/services/database.ts
+- [X] T052 [US5] Add file permission verification logic
+- [X] T053 [US5] Implement configuration validation checks
+- [X] T054 [US5] Create doctor command in src/cli/commands/doctor.ts
+- [X] T055 [US5] Add issue detection and severity classification
+- [X] T056 [US5] Implement suggestion generation for common issues
+- [X] T057 [US5] Add --fix flag for automatic repair attempts
+- [X] T058 [US5] Format health report for human and JSON output
 
 **Checkpoint**: User Story 5 complete - diagnostics work
 
@@ -166,11 +166,11 @@
 
 ### Implementation for User Story 6
 
-- [ ] T059 [US6] Implement artifact detection in src/cli/commands/uninstall.ts
-- [ ] T060 [US6] Add confirmation prompt with --yes flag to skip
-- [ ] T061 [US6] Implement safe directory removal (.codeindex/, .claude/)
-- [ ] T062 [US6] Handle .mcp.json file deletion
-- [ ] T063 [US6] Report removed paths in output
+- [X] T059 [US6] Implement artifact detection in src/cli/commands/uninstall.ts
+- [X] T060 [US6] Add confirmation prompt with --yes flag to skip
+- [X] T061 [US6] Implement safe directory removal (.codeindex/, .claude/)
+- [X] T062 [US6] Handle .mcp.json file deletion
+- [X] T063 [US6] Report removed paths in output
 
 **Checkpoint**: User Story 6 complete - clean uninstallation works
 
@@ -180,15 +180,15 @@
 
 **Purpose**: Final improvements affecting multiple stories
 
-- [ ] T064 [P] Add --help documentation for all commands
-- [ ] T065 [P] Implement --version flag with package version
-- [ ] T066 Add signal handling (SIGINT, SIGTERM) for graceful shutdown
-- [ ] T067 [P] Optimize database queries with additional indexes if needed
-- [ ] T068 Add memory usage monitoring for large codebases
-- [ ] T069 [P] Validate all exit codes (0 for success, non-zero for errors)
-- [ ] T070 Update package.json with proper bin field for global installation
-- [ ] T071 Add README.md with installation and usage instructions
-- [ ] T072 Verify cross-platform compatibility (Windows, macOS, Linux)
+- [X] T064 [P] Add --help documentation for all commands
+- [X] T065 [P] Implement --version flag with package version
+- [X] T066 Add signal handling (SIGINT, SIGTERM) for graceful shutdown
+- [X] T067 [P] Optimize database queries with additional indexes if needed
+- [X] T068 Add memory usage monitoring for large codebases
+- [X] T069 [P] Validate all exit codes (0 for success, non-zero for errors)
+- [X] T070 Update package.json with proper bin field for global installation
+- [X] T071 Add README.md with installation and usage instructions
+- [X] T072 Verify cross-platform compatibility (Windows, macOS, Linux)
 
 ---
 

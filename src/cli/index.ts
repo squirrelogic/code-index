@@ -35,11 +35,17 @@ process.on('SIGTERM', () => {
 import { createInitCommand } from './commands/init.js';
 import { createIndexCommand } from './commands/index.js';
 import { createSearchCommand } from './commands/search.js';
+import { createRefreshCommand } from './commands/refresh.js';
+import { createDoctorCommand } from './commands/doctor.js';
+import { createUninstallCommand } from './commands/uninstall.js';
 
 // Register commands
 program.addCommand(createInitCommand());
 program.addCommand(createIndexCommand());
 program.addCommand(createSearchCommand());
+program.addCommand(createRefreshCommand());
+program.addCommand(createDoctorCommand());
+program.addCommand(createUninstallCommand());
 
 // Parse arguments
 try {
