@@ -5,6 +5,15 @@
 **Status**: Draft
 **Input**: User description: "Create Claude Code hooks and installers for macOS/Linux (bash) and Windows (PowerShell). Hooks must fail-open: if the CLI isn't found, log a friendly message and exit 0. Provide PreToolUse (policy), PostToolUse (refresh on edits), and SessionStart (warm caches). Include OS detection and chmod +x/execution policy notes."
 
+## Clarifications
+
+### Session 2025-10-12
+- Q: For the hook scripts themselves, which language should they be written in? → A: Native shell scripts matching the installer (bash for Unix, PowerShell for Windows)
+- Q: Where should the PreToolUse hook store and read its policy configuration? → A: JSON file in .claude/policies.json
+- Q: Where should hooks write their log output for debugging and monitoring? → A: .codeindex/logs/ directory with hook-specific files
+- Q: How should the PostToolUse hook determine which files were modified by Claude Code? → A: Parse tool event context from Claude Code
+- Q: How should hooks handle concurrent executions? → A: Use file locks for critical sections only
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Install Hooks Cross-Platform (Priority: P1)
@@ -90,7 +99,7 @@ A developer wants to remove Claude Code hooks from their system. They run the un
 ### Edge Cases
 
 - What happens when hooks are called with unexpected arguments or in unexpected contexts?
-- How do hooks handle concurrent executions or race conditions?
+- How do hooks handle concurrent executions or race conditions? (Resolved: Use file locks for critical sections only)
 - What happens when file permissions prevent hook execution?
 - How do hooks handle different shell environments and configurations?
 - What happens when hooks are installed but .claude directory doesn't exist?
@@ -103,17 +112,21 @@ A developer wants to remove Claude Code hooks from their system. They run the un
 
 - **FR-001**: Installer MUST detect operating system automatically (macOS, Linux, Windows)
 - **FR-002**: Installer MUST create hooks in .claude/hooks/ directory relative to project root
+- **FR-002a**: Hook scripts MUST be implemented as native shell scripts (bash for Unix, PowerShell for Windows)
 - **FR-003**: Bash installer MUST set executable permissions (chmod +x) on hook scripts
 - **FR-004**: PowerShell installer MUST provide guidance on execution policy requirements
 - **FR-005**: All hooks MUST fail-open - if code-index CLI is not found, log friendly message and exit with code 0
 - **FR-006**: PreToolUse hook MUST execute before any tool operation in Claude Code
 - **FR-007**: PreToolUse hook MUST be able to check and enforce project-specific policies
+- **FR-007a**: Policy configuration MUST be stored in .claude/policies.json file
 - **FR-008**: PostToolUse hook MUST execute after file-modifying operations
 - **FR-009**: PostToolUse hook MUST trigger incremental index refresh for changed files
+- **FR-009a**: PostToolUse hook MUST parse tool event context from Claude Code to identify modified files
 - **FR-010**: SessionStart hook MUST execute when new Claude Code session begins
 - **FR-011**: SessionStart hook MUST warm caches by pre-loading frequently used index data
-- **FR-012**: All hooks MUST log operations to appropriate log files for debugging
+- **FR-012**: All hooks MUST log operations to .codeindex/logs/ directory with hook-specific files (e.g., pre-tool-use.log, post-tool-use.log, session-start.log)
 - **FR-013**: All hooks MUST handle errors gracefully without crashing or hanging
+- **FR-013a**: Hooks MUST use file locks for critical sections (e.g., index updates) to handle concurrent executions safely
 - **FR-014**: Installer MUST provide clear output about what was installed and where
 - **FR-015**: Uninstaller MUST remove all hook files and configurations cleanly
 - **FR-016**: Hooks MUST work with relative paths from project root
@@ -122,7 +135,7 @@ A developer wants to remove Claude Code hooks from their system. They run the un
 ### Key Entities
 
 - **Hook Configuration**: Represents settings for each hook including enabled state, policies, and parameters
-- **Hook Event**: Represents trigger event from Claude Code with context about tool being used
+- **Hook Event**: Represents trigger event from Claude Code with context about tool being used (includes tool name, parameters, and affected files)
 - **Installation State**: Represents what hooks are installed, their versions, and health status
 - **Policy Rule**: Represents a single policy check with conditions and actions
 - **Cache State**: Represents warmed cache data and last refresh timestamp
