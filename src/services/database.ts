@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, statSync } from 'fs';
 import type { CodeIndexEntry } from '../models/index-entry.js';
 import type { ProjectConfiguration } from '../models/project-config.js';
 
@@ -281,6 +281,66 @@ export class DatabaseService {
   }
 
   /**
+   * Batch insert entries with simplified data structure
+   */
+  insertBatch(entries: any[]): void {
+    if (!this.db) throw new Error('Database not connected');
+
+    const transaction = this.db.transaction((entries: any[]) => {
+      for (const entry of entries) {
+        // Generate fields from simplified structure
+        const id = entry.hash;
+        const absolutePath = entry.path;
+        const filename = entry.path.split('/').pop() || '';
+        const extension = filename.includes('.') ? '.' + filename.split('.').pop() : '';
+        const lineCount = entry.content ? entry.content.split('\n').length : 0;
+        const encoding = 'utf-8';
+        const isText = !entry.isBinary;
+        const modifiedAt = entry.modifiedAt || new Date();
+        const indexedAt = new Date();
+
+        this.db!.prepare(`
+          INSERT OR REPLACE INTO code_entries (
+            id, path, absolute_path, filename, extension, content_hash,
+            size, line_count, encoding, language, is_text, is_binary,
+            file_modified_at, indexed_at, content, tokens, symbols
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          id,
+          entry.path,
+          absolutePath,
+          filename,
+          extension,
+          entry.hash,
+          entry.size,
+          lineCount,
+          encoding,
+          entry.language,
+          isText ? 1 : 0,
+          entry.isBinary ? 1 : 0,
+          modifiedAt.toISOString(),
+          indexedAt.toISOString(),
+          entry.content,
+          null,
+          null
+        );
+      }
+    });
+
+    transaction(entries);
+  }
+
+  /**
+   * Clear all entries from the index
+   */
+  clearIndex(): void {
+    if (!this.db) throw new Error('Database not connected');
+
+    this.db.prepare('DELETE FROM code_entries').run();
+    this.db.prepare('DELETE FROM code_search').run();
+  }
+
+  /**
    * Gets an entry by path
    */
   getEntryByPath(path: string): CodeIndexEntry | null {
@@ -426,7 +486,7 @@ export class DatabaseService {
   getDatabaseSize(): number {
     if (!existsSync(this.dbPath)) return 0;
 
-    const stats = require('fs').statSync(this.dbPath);
+    const stats = statSync(this.dbPath);
     return stats.size;
   }
 

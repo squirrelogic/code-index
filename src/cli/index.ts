@@ -33,9 +33,13 @@ process.on('SIGTERM', () => {
 
 // Import and register commands
 import { createInitCommand } from './commands/init.js';
+import { createIndexCommand } from './commands/index.js';
+import { createSearchCommand } from './commands/search.js';
 
 // Register commands
 program.addCommand(createInitCommand());
+program.addCommand(createIndexCommand());
+program.addCommand(createSearchCommand());
 
 // Parse arguments
 try {

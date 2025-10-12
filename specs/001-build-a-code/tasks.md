@@ -83,15 +83,15 @@
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Create Gitignore service in src/services/gitignore.ts using ignore library
-- [ ] T029 [US2] Implement file traversal with gitignore support in src/services/indexer.ts
-- [ ] T030 [US2] Add file content reading and hash calculation in src/services/indexer.ts
-- [ ] T031 [US2] Implement language detection and text/binary classification
-- [ ] T032 [US2] Add batch processing logic (100 files per transaction) in src/services/indexer.ts
-- [ ] T033 [US2] Implement index command in src/cli/commands/index.ts
-- [ ] T034 [US2] Add database insertion with prepared statements and transactions
-- [ ] T035 [US2] Implement progress reporting for verbose mode
-- [ ] T036 [US2] Add performance metrics (files/second, total time) to output
+- [X] T028 [US2] Create Gitignore service in src/services/gitignore.ts using ignore library
+- [X] T029 [US2] Implement file traversal with gitignore support in src/services/indexer.ts
+- [X] T030 [US2] Add file content reading and hash calculation in src/services/indexer.ts
+- [X] T031 [US2] Implement language detection and text/binary classification
+- [X] T032 [US2] Add batch processing logic (100 files per transaction) in src/services/indexer.ts
+- [X] T033 [US2] Implement index command in src/cli/commands/index.ts
+- [X] T034 [US2] Add database insertion with prepared statements and transactions
+- [X] T035 [US2] Implement progress reporting for verbose mode
+- [X] T036 [US2] Add performance metrics (files/second, total time) to output
 
 **Checkpoint**: User Story 2 complete - indexing works independently
 
@@ -105,14 +105,14 @@
 
 ### Implementation for User Story 3
 
-- [ ] T037 [US3] Implement text search with FTS5 in src/services/searcher.ts
-- [ ] T038 [US3] Add regex pattern search support in src/services/searcher.ts
-- [ ] T039 [US3] Implement relevance scoring and result ranking
-- [ ] T040 [US3] Create search command in src/cli/commands/search.ts
-- [ ] T041 [US3] Add query parameter handling (--regex, --case-sensitive, --limit)
-- [ ] T042 [US3] Implement result formatting with context snippets
-- [ ] T043 [US3] Add helpful error when no index exists
-- [ ] T044 [US3] Implement JSON output format for search results
+- [X] T037 [US3] Implement text search with FTS5 in src/services/searcher.ts
+- [X] T038 [US3] Add regex pattern search support in src/services/searcher.ts
+- [X] T039 [US3] Implement relevance scoring and result ranking
+- [X] T040 [US3] Create search command in src/cli/commands/search.ts
+- [X] T041 [US3] Add query parameter handling (--regex, --case-sensitive, --limit)
+- [X] T042 [US3] Implement result formatting with context snippets
+- [X] T043 [US3] Add helpful error when no index exists
+- [X] T044 [US3] Implement JSON output format for search results
 
 **Checkpoint**: User Story 3 complete - core MVP functionality ready
 
