@@ -21,14 +21,14 @@
 
 **Purpose**: Project initialization and basic TypeScript/Node.js structure
 
-- [ ] T001 Create project directory structure per plan.md (`src/models/`, `src/services/`, `src/cli/`, `src/lib/`)
-- [ ] T002 Initialize package.json with TypeScript, Node.js 20+ configuration, and @squirrelogic/code-index package name
-- [ ] T003 [P] Install production dependencies: better-sqlite3@^11.0.0, commander@^14.0.0, ignore@^7.0.0
-- [ ] T004 [P] Install development dependencies: typescript@^5.0.0, @types/node@^20.0.0, @types/better-sqlite3@^7.6.0, vitest@^1.0.0
-- [ ] T005 Create tsconfig.json with ES2022 target, module resolution, and strict mode
-- [ ] T006 [P] Configure .gitignore with node_modules, dist/, .codeindex/, and other standard patterns
-- [ ] T007 [P] Add npm scripts for build, dev, and package publishing
-- [ ] T008 Create CLI entry point with shebang in src/cli/index.ts
+- [X] T001 Create project directory structure per plan.md (`src/models/`, `src/services/`, `src/cli/`, `src/lib/`)
+- [X] T002 Initialize package.json with TypeScript, Node.js 20+ configuration, and @squirrelogic/code-index package name
+- [X] T003 [P] Install production dependencies: better-sqlite3@^11.0.0, commander@^14.0.0, ignore@^7.0.0
+- [X] T004 [P] Install development dependencies: typescript@^5.0.0, @types/node@^20.0.0, @types/better-sqlite3@^7.6.0, vitest@^1.0.0
+- [X] T005 Create tsconfig.json with ES2022 target, module resolution, and strict mode
+- [X] T006 [P] Configure .gitignore with node_modules, dist/, .codeindex/, and other standard patterns
+- [X] T007 [P] Add npm scripts for build, dev, and package publishing
+- [X] T008 Create CLI entry point with shebang in src/cli/index.ts
 
 ---
 
@@ -38,16 +38,16 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T009 Create ProjectConfiguration model in src/models/project-config.ts with interface and validation
-- [ ] T010 [P] Create CodeIndexEntry model in src/models/index-entry.ts with Symbol types
-- [ ] T011 [P] Create SearchResult model in src/models/search-result.ts with Match interface
-- [ ] T012 [P] Create HealthCheckResult model in src/models/health-check.ts with ComponentStatus
-- [ ] T013 Implement Database service in src/services/database.ts with SQLite connection, WAL mode, prepared statements
-- [ ] T014 Create database schema setup in src/services/database.ts with tables, indexes, and FTS5
-- [ ] T015 [P] Implement file utilities in src/lib/file-utils.ts for path handling, validation, traversal
-- [ ] T016 [P] Implement JSON lines logger in src/cli/utils/logger.ts for .codeindex/logs/
-- [ ] T017 [P] Implement output formatter in src/cli/utils/output.ts for human/JSON output modes
-- [ ] T018 Setup Commander.js framework in src/cli/index.ts with base command structure
+- [X] T009 Create ProjectConfiguration model in src/models/project-config.ts with interface and validation
+- [X] T010 [P] Create CodeIndexEntry model in src/models/index-entry.ts with Symbol types
+- [X] T011 [P] Create SearchResult model in src/models/search-result.ts with Match interface
+- [X] T012 [P] Create HealthCheckResult model in src/models/health-check.ts with ComponentStatus
+- [X] T013 Implement Database service in src/services/database.ts with SQLite connection, WAL mode, prepared statements
+- [X] T014 Create database schema setup in src/services/database.ts with tables, indexes, and FTS5
+- [X] T015 [P] Implement file utilities in src/lib/file-utils.ts for path handling, validation, traversal
+- [X] T016 [P] Implement JSON lines logger in src/cli/utils/logger.ts for .codeindex/logs/
+- [X] T017 [P] Implement output formatter in src/cli/utils/output.ts for human/JSON output modes
+- [X] T018 Setup Commander.js framework in src/cli/index.ts with base command structure
 
 **Checkpoint**: Foundation ready - user story implementation can now begin
 
@@ -61,15 +61,15 @@
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Create MCP configuration generator in src/lib/mcp-config.ts for .mcp.json file
-- [ ] T020 [US1] Implement init command in src/cli/commands/init.ts with directory creation logic
-- [ ] T021 [US1] Add .codeindex/ directory creation with index.db and logs/ subdirectory
-- [ ] T022 [US1] Add .claude/ directory structure creation (settings/, hooks/, tools/)
-- [ ] T023 [US1] Generate default .mcp.json configuration file at project root
-- [ ] T024 [US1] Implement idempotent behavior - preserve existing configs on re-init
-- [ ] T025 [US1] Add .gitignore modification to exclude .codeindex/logs/* if not present
-- [ ] T026 [US1] Implement --force flag for reinitializing existing installations
-- [ ] T027 [US1] Add success/error output formatting for init command
+- [X] T019 [US1] Create MCP configuration generator in src/lib/mcp-config.ts for .mcp.json file
+- [X] T020 [US1] Implement init command in src/cli/commands/init.ts with directory creation logic
+- [X] T021 [US1] Add .codeindex/ directory creation with index.db and logs/ subdirectory
+- [X] T022 [US1] Add .claude/ directory structure creation (settings/, hooks/, tools/)
+- [X] T023 [US1] Generate default .mcp.json configuration file at project root
+- [X] T024 [US1] Implement idempotent behavior - preserve existing configs on re-init
+- [X] T025 [US1] Add .gitignore modification to exclude .codeindex/logs/* if not present
+- [X] T026 [US1] Implement --force flag for reinitializing existing installations
+- [X] T027 [US1] Add success/error output formatting for init command
 
 **Checkpoint**: User Story 1 complete - initialization works independently
 
