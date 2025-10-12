@@ -68,3 +68,9 @@ docs/_build/
 # Custom directories (already tracked in your git status)
 # .claude/
 # .specify/
+
+# Code-index specific
+.codeindex/logs/
+.codeindex/*.log
+.codeindex/index.db-wal
+.codeindex/index.db-shm

@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "servers": {
+    "code-index": {
+      "command": "/Users/sbeardsley/Developer/personal/projects/code-index/node_modules/.bin/code-index",
+      "args": [
+        "mcp-server"
+      ],
+      "env": {
+        "PROJECT_ROOT": "/Users/sbeardsley/Developer/personal/projects/code-index"
+      }
+    }
+  }
+}

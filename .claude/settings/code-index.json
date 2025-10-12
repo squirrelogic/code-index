@@ -1,0 +1,7 @@
+{
+  "autoIndex": true,
+  "excludePatterns": [],
+  "includePatterns": [],
+  "maxFileSize": 10485760,
+  "followSymlinks": false
+}
