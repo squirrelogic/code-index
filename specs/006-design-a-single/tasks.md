@@ -130,7 +130,7 @@ description: "Task list for database schema implementation"
 
 ### Implementation for User Story 3
 
-- [ ] T033 [US3] Add FTS5 virtual table definition to `sql/migrations/001_initial_schema.sql`:
+- [X] T033 [US3] Add FTS5 virtual table definition to `sql/migrations/001_initial_schema.sql`:
   ```sql
   CREATE VIRTUAL TABLE search USING fts5(
       content,
@@ -141,16 +141,16 @@ description: "Task list for database schema implementation"
       tokenize = 'unicode61 remove_diacritics 1 tokenchars "_."'
   );
   ```
-- [ ] T034 [US3] Define `SearchResult` interface in `src/models/database-schema.ts` with fields: file_id, symbol_id, file_path, snippet, rank
-- [ ] T035 [US3] Implement `SearchService` class in `src/services/search-service.ts` with methods:
+- [X] T034 [US3] Define `SearchResult` interface in `src/models/database-schema.ts` with fields: file_id, symbol_id, file_path, snippet, rank
+- [X] T035 [US3] Implement `SearchService` class in `src/services/search-service.ts` with methods:
   - `indexContent(fileId: string, symbolId: string | null, content: string, documentation: string | null, filePath: string): void` - Add content to FTS5 index
   - `search(query: string, limit: number): SearchResult[]` - Keyword search with BM25 ranking (<100ms target)
   - `searchPhrase(phrase: string, limit: number): SearchResult[]` - Exact phrase search
   - `searchPrefix(prefix: string, limit: number): SearchResult[]` - Prefix/autocomplete search
   - `searchWithWeights(query: string, contentWeight: number, docsWeight: number, limit: number): SearchResult[]` - Custom weighted search
-- [ ] T036 [US3] Add snippet generation using FTS5 `snippet()` function with highlight markers
-- [ ] T037 [US3] Add query performance monitoring for search operations (log queries >100ms)
-- [ ] T038 [US3] Implement batch indexing for search content using transactions
+- [X] T036 [US3] Add snippet generation using FTS5 `snippet()` function with highlight markers
+- [X] T037 [US3] Add query performance monitoring for search operations (log queries >100ms)
+- [X] T038 [US3] Implement batch indexing for search content using transactions
 
 **Checkpoint**: All P1 user stories (US1, US2, US3) should now be independently functional - MVP complete!
 

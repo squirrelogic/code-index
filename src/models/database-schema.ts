@@ -150,3 +150,19 @@ export interface CrossReference {
 	/** Creation timestamp (Unix epoch seconds) */
 	created_at: number;
 }
+
+/**
+ * SearchResult representing a full-text search result
+ */
+export interface SearchResult {
+	/** File identifier */
+	file_id: string;
+	/** Symbol identifier (optional) */
+	symbol_id: string | null;
+	/** File path for display */
+	file_path: string;
+	/** Highlighted snippet of matched content */
+	snippet: string;
+	/** BM25 relevance rank (lower/more negative = more relevant) */
+	rank: number;
+}

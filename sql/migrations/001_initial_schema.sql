@@ -111,3 +111,15 @@ CREATE INDEX idx_xrefs_source ON xrefs(source_symbol_id);
 
 -- Compound index for reference type filtering
 CREATE INDEX idx_xrefs_type ON xrefs(reference_type, target_symbol_id);
+
+-- ============================================================================
+-- Search Table: FTS5 virtual table for full-text search
+-- ============================================================================
+CREATE VIRTUAL TABLE search USING fts5(
+    content,                  -- Searchable: code content
+    documentation,            -- Searchable: documentation/comments
+    file_id UNINDEXED,       -- Not searchable: for JOIN with files table
+    symbol_id UNINDEXED,     -- Not searchable: for JOIN with symbols table
+    file_path UNINDEXED,     -- Not searchable: display only
+    tokenize = 'unicode61 remove_diacritics 1 tokenchars "_."'
+);
