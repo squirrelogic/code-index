@@ -164,33 +164,33 @@ description: "Task list for database schema implementation"
 
 ### Implementation for User Story 4
 
-- [ ] T039 [P] [US4] Create migration `sql/migrations/002_add_chunks_embeddings.sql` with chunks table DDL
-- [ ] T040 [P] [US4] Add chunks table schema with fields: id (stable content-derived hash), file_id, symbol_id, content, context_before, context_after, language, line_start, line_end, created_at, deleted_at
-- [ ] T041 [US4] Add chunks table indexes in migration 002:
+- [X] T039 [P] [US4] Create migration `sql/migrations/002_add_chunks_embeddings.sql` with chunks table DDL
+- [X] T040 [P] [US4] Add chunks table schema with fields: id (stable content-derived hash), file_id, symbol_id, content, context_before, context_after, language, line_start, line_end, created_at, deleted_at
+- [X] T041 [US4] Add chunks table indexes in migration 002:
   - `idx_chunks_file` (partial WHERE deleted_at IS NULL)
   - `idx_chunks_symbol` (partial WHERE deleted_at IS NULL)
   - `idx_chunks_id` (partial UNIQUE WHERE deleted_at IS NULL)
-- [ ] T042 [US4] Add embeddings table to migration 002 with fields: chunk_id (PRIMARY KEY), embedding (BLOB, 1536 bytes), model, created_at
-- [ ] T043 [US4] Add embeddings table index: `idx_embeddings_model` (filter by embedding model version)
-- [ ] T044 [US4] Define `Chunk` entity interface in `src/models/database-schema.ts`
-- [ ] T045 [US4] Define `Embedding` entity interface in `src/models/database-schema.ts`
-- [ ] T046 [US4] Implement chunk ID generation function (SHA-256 hash of normalized content) in `src/lib/chunk-utils.ts`
-- [ ] T047 [US4] Implement embedding encoding function (Float32Array → Buffer) in `src/lib/embedding-utils.ts`
-- [ ] T048 [US4] Implement embedding decoding function (Buffer → Float32Array) in `src/lib/embedding-utils.ts`
-- [ ] T049 [US4] Implement `ChunkRepository` class in `src/services/chunk-repository.ts` with methods:
+- [X] T042 [US4] Add embeddings table to migration 002 with fields: chunk_id (PRIMARY KEY), embedding (BLOB, 1536 bytes), model, created_at
+- [X] T043 [US4] Add embeddings table index: `idx_embeddings_model` (filter by embedding model version)
+- [X] T044 [US4] Define `Chunk` entity interface in `src/models/database-schema.ts`
+- [X] T045 [US4] Define `Embedding` entity interface in `src/models/database-schema.ts`
+- [X] T046 [US4] Implement chunk ID generation function (SHA-256 hash of normalized content) in `src/lib/chunk-utils.ts`
+- [X] T047 [US4] Implement embedding encoding function (Float32Array → Buffer) in `src/lib/embedding-utils.ts`
+- [X] T048 [US4] Implement embedding decoding function (Buffer → Float32Array) in `src/lib/embedding-utils.ts`
+- [X] T049 [US4] Implement `ChunkRepository` class in `src/services/chunk-repository.ts` with methods:
   - `insert(chunk: Chunk): string` - Insert chunk with content-based ID
   - `findByFile(fileId: string): Chunk[]` - Find chunks in file
   - `findBySymbol(symbolId: string): Chunk | null` - Find chunk for symbol
   - `softDelete(chunkId: string): void` - Soft delete chunk
-- [ ] T050 [US4] Implement `EmbeddingRepository` class in `src/services/embedding-repository.ts` with methods:
+- [X] T050 [US4] Implement `EmbeddingRepository` class in `src/services/embedding-repository.ts` with methods:
   - `insert(chunkId: string, embedding: number[], model: string): void` - Store embedding
   - `get(chunkId: string): Float32Array | null` - Retrieve embedding
   - `getAll(): Array<{chunkId: string, embedding: Float32Array}>` - Get all for similarity search
   - `deleteByChunk(chunkId: string): void` - Delete embedding when chunk deleted
-- [ ] T051 [US4] Implement cosine similarity function in `src/lib/embedding-utils.ts`
-- [ ] T052 [US4] Implement brute-force similarity search in `src/services/embedding-repository.ts`:
+- [X] T051 [US4] Implement cosine similarity function in `src/lib/embedding-utils.ts`
+- [X] T052 [US4] Implement brute-force similarity search in `src/services/embedding-repository.ts`:
   - `findSimilar(queryEmbedding: number[], topK: number, minSimilarity: number): SimilarityResult[]`
-- [ ] T053 [US4] Add validation for embedding dimensions (must be 384) and BLOB size (must be 1536 bytes)
+- [X] T053 [US4] Add validation for embedding dimensions (must be 384) and BLOB size (must be 1536 bytes)
 
 **Checkpoint**: User Stories 1, 2, 3, AND 4 should all work independently
 

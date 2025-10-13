@@ -166,3 +166,57 @@ export interface SearchResult {
 	/** BM25 relevance rank (lower/more negative = more relevant) */
 	rank: number;
 }
+
+/**
+ * Chunk entity representing a semantic code unit for AI processing
+ */
+export interface Chunk {
+	/** Stable content-based identifier (SHA-256 hash of normalized content) */
+	id: string;
+	/** Parent file identifier */
+	file_id: string;
+	/** Associated symbol identifier (optional) */
+	symbol_id: string | null;
+	/** Actual code content */
+	content: string;
+	/** Preceding context (e.g., class definition) */
+	context_before: string | null;
+	/** Following context (optional) */
+	context_after: string | null;
+	/** Programming language */
+	language: string;
+	/** Starting line number (1-indexed) */
+	line_start: number;
+	/** Ending line number (1-indexed, inclusive) */
+	line_end: number;
+	/** Creation timestamp (Unix epoch seconds) */
+	created_at: number;
+	/** Soft delete timestamp (NULL = active, Unix epoch = deleted) */
+	deleted_at: number | null;
+}
+
+/**
+ * Embedding entity representing a 384-dimensional vector embedding
+ */
+export interface Embedding {
+	/** Associated chunk identifier */
+	chunk_id: string;
+	/** 384-dimensional float vector (stored as BLOB, 1536 bytes) */
+	embedding: Buffer;
+	/** Embedding model identifier (e.g., 'all-MiniLM-L6-v2') */
+	model: string;
+	/** Creation timestamp (Unix epoch seconds) */
+	created_at: number;
+}
+
+/**
+ * Similarity search result with chunk and score
+ */
+export interface SimilarityResult {
+	/** Chunk identifier */
+	chunk_id: string;
+	/** Cosine similarity score (0-1, higher = more similar) */
+	similarity: number;
+	/** Associated chunk data (optional, for JOIN queries) */
+	chunk?: Chunk;
+}
