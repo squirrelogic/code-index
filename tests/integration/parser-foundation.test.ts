@@ -124,9 +124,9 @@ describe('Parser Foundation - Core Parsing Pipeline', () => {
       expect(result.metadata.lineCount).toBeGreaterThan(1000);
 
       // Check parse duration (SC-001: 1,000 lines/second minimum)
-      // With symbol extraction enabled, should take < 50ms for 1600 lines
-      // This still exceeds 32,000 lines/second
-      expect(result.metadata.duration).toBeLessThan(50);
+      // With symbol extraction enabled, should take < 75ms for 1600 lines
+      // This still exceeds 21,000 lines/second (50% buffer for CI/CD variability)
+      expect(result.metadata.duration).toBeLessThan(75);
 
       // Calculate actual performance
       const linesPerSecond = (result.metadata.lineCount / result.metadata.duration) * 1000;

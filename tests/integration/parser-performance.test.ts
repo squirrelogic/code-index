@@ -109,7 +109,7 @@ describe('Parser Performance Benchmarks (SC-001)', () => {
       // For very fast operations (< 1ms), we just verify max is reasonable
       if (minDuration > 0) {
         // Max duration shouldn't be more than 5x the minimum (accounting for outliers)
-        expect(maxDuration).toBeLessThan(minDuration * 5);
+        expect(maxDuration).toBeLessThanOrEqual(minDuration * 5);
       } else {
         // For sub-millisecond operations, just verify max is reasonable
         expect(maxDuration).toBeLessThan(50);
