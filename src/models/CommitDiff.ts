@@ -6,7 +6,11 @@
 export enum DiffSource {
   LAST_COMMIT = 'last_commit',
   COMMIT_RANGE = 'commit_range',
-  WORKING_DIRECTORY = 'working_directory'
+  WORKING_DIRECTORY = 'working_directory',
+  MANUAL = 'manual',
+  HOOK_MERGE = 'hook_merge',
+  HOOK_CHECKOUT = 'hook_checkout',
+  HOOK_REWRITE = 'hook_rewrite'
 }
 
 export enum FileStatus {

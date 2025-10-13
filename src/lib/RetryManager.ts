@@ -145,6 +145,16 @@ export class RetryManager {
   }
 
   /**
+   * Alias for retryOrThrow - executes an operation with retry logic
+   * @param operation The async operation to execute
+   * @returns The result of the operation
+   * @throws The last error if all retries fail
+   */
+  async execute<T>(operation: () => Promise<T>): Promise<T> {
+    return this.retryOrThrow(operation);
+  }
+
+  /**
    * Calculates the delay for the next retry attempt
    */
   private calculateDelay(attempt: number, options: Required<RetryOptions>): number {

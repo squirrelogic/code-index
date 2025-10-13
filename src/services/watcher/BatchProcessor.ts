@@ -117,7 +117,12 @@ export class BatchProcessor extends EventEmitter {
       };
 
       // Log summary
-      this.logger.logBatchComplete(summary);
+      this.logger.logBatchComplete(
+        summary.totalEvents,
+        summary.processed,
+        summary.failed,
+        summary.duration
+      );
 
       // Emit completion event
       this.emit('batchComplete', summary);
@@ -210,15 +215,15 @@ export class BatchProcessor extends EventEmitter {
 
     for (const event of events) {
       try {
-        if (!event.oldCanonicalPath) {
+        const oldPath = event.oldCanonicalPath;
+        if (!oldPath) {
           throw new Error('Rename event missing oldCanonicalPath');
         }
 
         await this.retryManager.execute(async () => {
           await this.indexer.renameFile(
-            event.oldCanonicalPath,
-            event.canonicalPath,
-            event.path
+            oldPath,
+            event.canonicalPath
           );
         });
 

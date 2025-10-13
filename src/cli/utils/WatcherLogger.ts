@@ -283,6 +283,38 @@ export class WatcherLogger {
       timestamp: Date.now()
     });
   }
+
+  /**
+   * Logs an error (convenience method)
+   */
+  logError(message: string, error?: Error, data?: any): void {
+    this.error(message, error, data);
+  }
+
+  /**
+   * Logs a batch operation (convenience method)
+   */
+  logBatch(batchSize: number, details?: any): void {
+    this.info('Processing batch', {
+      batchSize,
+      ...details,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Logs watcher start
+   */
+  logStart(details?: any): void {
+    this.info('Watcher started', details);
+  }
+
+  /**
+   * Logs watcher stop
+   */
+  logStop(details?: any): void {
+    this.info('Watcher stopped', details);
+  }
 }
 
 /**

@@ -426,4 +426,35 @@ export class IncrementalIndexer {
       isSymlink: Boolean(row.is_symlink)
     };
   }
+
+  // TODO: Stub methods for BatchProcessor - implement properly
+  async removeFile(path: string): Promise<void> {
+    // Stub - should remove file from index
+    console.warn('removeFile stub called for:', path);
+  }
+
+  async renameFile(oldPath: string, newPath: string): Promise<void> {
+    // Stub - should rename file in index
+    console.warn('renameFile stub called:', oldPath, '->', newPath);
+  }
+
+  async addFiles(paths: string[]): Promise<void> {
+    // Stub - should add multiple files to index
+    console.warn('addFiles stub called for', paths.length, 'files');
+  }
+
+  async addFile(path: string): Promise<void> {
+    // Stub - should add single file to index
+    console.warn('addFile stub called for:', path);
+  }
+
+  async updateFiles(paths: string[]): Promise<void> {
+    // Stub - should update multiple files in index
+    console.warn('updateFiles stub called for', paths.length, 'files');
+  }
+
+  async updateFile(path: string): Promise<void> {
+    // Stub - should update single file in index
+    console.warn('updateFile stub called for:', path);
+  }
 }

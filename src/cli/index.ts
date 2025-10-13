@@ -39,6 +39,7 @@ import { createRefreshCommand } from './commands/refresh.js';
 import { createDoctorCommand } from './commands/doctor.js';
 import { createUninstallCommand } from './commands/uninstall.js';
 import { createWatchCommand } from './commands/watch.js';
+import { createHooksCommand } from './commands/hooks.js';
 
 // Register commands
 program.addCommand(createInitCommand());
@@ -48,6 +49,7 @@ program.addCommand(createRefreshCommand());
 program.addCommand(createDoctorCommand());
 program.addCommand(createUninstallCommand());
 program.addCommand(createWatchCommand());
+program.addCommand(createHooksCommand());
 
 // Parse arguments
 try {

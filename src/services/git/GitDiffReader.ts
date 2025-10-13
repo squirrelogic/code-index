@@ -124,13 +124,13 @@ export class GitDiffReader {
       if (!line.trim()) continue;
 
       const parts = line.split('\t');
-      if (parts.length < 2) continue;
+      if (parts.length < 2 || !parts[0]) continue;
 
       const statusPart = parts[0];
       const status = parseFileStatus(statusPart);
 
       // Handle renames (format: R100\toldpath\tnewpath)
-      if (status === FileStatus.RENAMED && parts.length === 3) {
+      if (status === FileStatus.RENAMED && parts.length === 3 && parts[1] && parts[2]) {
         const similarity = this.parseSimilarity(statusPart);
         changedFiles.push({
           path: parts[2],
@@ -140,7 +140,7 @@ export class GitDiffReader {
         });
       }
       // Handle copies
-      else if (status === FileStatus.COPIED && parts.length === 3) {
+      else if (status === FileStatus.COPIED && parts.length === 3 && parts[1] && parts[2]) {
         const similarity = this.parseSimilarity(statusPart);
         changedFiles.push({
           path: parts[2],
@@ -150,7 +150,7 @@ export class GitDiffReader {
         });
       }
       // Handle normal changes
-      else {
+      else if (parts[1]) {
         changedFiles.push({
           path: parts[1],
           status
@@ -166,7 +166,7 @@ export class GitDiffReader {
    */
   private parseSimilarity(status: string): number | undefined {
     const match = status.match(/[RC](\d+)/);
-    return match ? parseInt(match[1], 10) : undefined;
+    return match && match[1] ? parseInt(match[1], 10) : undefined;
   }
 
   /**

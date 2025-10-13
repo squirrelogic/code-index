@@ -23,22 +23,22 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [Setup] Project Dependencies and Configuration
 
-**T001** [P] Install new dependencies [X]
+**T001** [X] [P] [X] Install new dependencies [X]
 - File: `package.json`
 - Add: `chokidar@^3.6.0`, `simple-git@^3.28.0`
 - Run: `npm install`
 
-**T002** [P] Update TypeScript configuration [X]
+**T002** [X] [P] [X] Update TypeScript configuration [X]
 - File: `tsconfig.json`
 - Ensure: Node.js types include fs, path, process
 - Add: Type definitions for chokidar and simple-git
 
-**T003** [P] Create watcher configuration schema [X]
+**T003** [X] [P] [X] Create watcher configuration schema [X]
 - File: `src/models/WatcherConfig.ts`
 - Define: Interface for watcher configuration options
 - Include: debounceDelay, batchSize, maxQueueSize, ignorePatterns, etc.
 
-**T004** [P] Update CLI command structure [X]
+**T004** [X] [P] [X] Update CLI command structure [X]
 - File: `src/cli/index.ts`
 - Import: New watch and hooks commands
 - Register: Commands with commander.js
@@ -49,45 +49,45 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [Foundation] Core Infrastructure
 
-**T005** Update database schema for watcher support [X]
+**T005** [X] Update database schema for watcher support [X]
 - File: `src/services/database/migrations/003_watcher.sql`
 - Create: Tables for file_change_events, ignore_patterns, git_hooks, watcher_state
 - Add: Canonical path column to index_entries
 - Create: Necessary indexes
 
-**T006** [P] Create base error types for watcher [X]
+**T006** [X] [P] [X] Create base error types for watcher [X]
 - File: `src/lib/errors/WatcherErrors.ts`
 - Define: FileAccessError, WatcherTimeoutError, GitHookError
 - Include: Error categorization (transient, permanent, fatal)
 
-**T007** [P] Implement retry manager with exponential backoff [X]
+**T007** [X] [P] [X] Implement retry manager with exponential backoff [X]
 - File: `src/lib/RetryManager.ts`
 - Implement: Retry logic with configurable attempts (3) and delays (1s, 2s, 4s)
 - Handle: Different error categories
 - Export: RetryManager class
 
-**T008** [P] Create file system utilities [X]
+**T008** [X] [P] [X] Create file system utilities [X]
 - File: `src/lib/FileSystemUtils.ts`
 - Implement: getCanonicalPath, checkFileAccess, detectFilesystemType
 - Handle: Symlinks, permissions, network drives
 
-**T009** Create incremental indexer base [X]
+**T009** [X] Create incremental indexer base [X]
 - File: `src/services/indexer/IncrementalIndexer.ts`
 - Implement: Base incremental indexing logic
 - Use: Existing database service
 - Support: Batch processing with transactions
 
-**T010** [P] Set up logging for watcher operations [X]
+**T010** [X] [P] [X] Set up logging for watcher operations [X]
 - File: `src/cli/utils/WatcherLogger.ts`
 - Extend: Existing logger for watcher-specific needs
 - Support: JSON lines format to `.codeindex/logs/watcher.jsonl`
 
-**T011** [P] Create performance monitoring utilities [X]
+**T011** [X] [P] [X] Create performance monitoring utilities [X]
 - File: `src/lib/PerformanceMonitor.ts`
 - Track: Memory usage, event processing times
 - Alert: When thresholds exceeded (400MB memory)
 
-**T012** Initialize watcher state management [X]
+**T012** [X] Initialize watcher state management [X]
 - File: `src/services/watcher/WatcherState.ts`
 - Implement: State persistence to database
 - Track: watching status, events processed, memory usage
@@ -112,13 +112,13 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] Core Models
 
-**T013** [P] Implement FileChangeEvent model [X]
+**T013** [X] [P] [X] Implement FileChangeEvent model [X]
 - File: `src/models/FileChangeEvent.ts`
 - Define: Interface and enums (FileChangeType, ProcessingStatus)
 - Include: Validation methods
 - Export: Types and factory functions
 
-**T014** [P] Implement DebounceBuffer model [X]
+**T014** [X] [P] [X] Implement DebounceBuffer model [X]
 - File: `src/models/DebounceBuffer.ts`
 - Define: Buffer structure with Map<string, FileChangeEvent>
 - Include: Event coalescing logic
@@ -126,32 +126,32 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] Core Services
 
-**T015** Implement DebounceManager service [X]
+**T015** [X] Implement DebounceManager service [X]
 - File: `src/services/watcher/DebounceManager.ts`
 - Implement: Event accumulation and coalescing
 - Handle: Timer management for delayed processing
 - Process: Events in dependency order
 
-**T016** [P] Implement IgnorePatterns service [X]
+**T016** [X] [P] [X] Implement IgnorePatterns service [X]
 - File: `src/services/watcher/IgnorePatterns.ts`
 - Load: Default patterns (node_modules, dist, build, .git, .codeindex)
 - Support: Glob pattern matching
 - Cache: Pattern evaluation results
 
-**T017** Implement FileWatcher service [X]
+**T017** [X] Implement FileWatcher service [X]
 - File: `src/services/watcher/FileWatcher.ts`
 - Use: chokidar with configuration
 - Emit: FileChangeEvents to DebounceManager
 - Handle: Symlinks with canonical path resolution
 - Requires: T013, T014, T015, T016
 
-**T018** Implement batch processor for changes [X]
+**T018** [X] Implement batch processor for changes [X]
 - File: `src/services/watcher/BatchProcessor.ts`
 - Process: Batches of 100 files maximum
 - Prioritize: User files over dependencies
 - Use: IncrementalIndexer for database updates
 
-**T019** [P] Add dependency order resolution [X]
+**T019** [X] [P] [X] Add dependency order resolution [X]
 - File: `src/services/watcher/DependencyResolver.ts`
 - Parse: Import/require statements with regex
 - Build: Dependency graph
@@ -159,13 +159,13 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] CLI Command
 
-**T020** Implement watch command [X]
+**T020** [X] Implement watch command [X]
 - File: `src/cli/commands/watch.ts`
 - Parse: Command-line arguments (--delay, --batch-size, --ignore, etc.)
 - Initialize: FileWatcher with configuration
 - Display: Real-time status updates
 
-**T021** Add graceful shutdown handling [X]
+**T021** [X] Add graceful shutdown handling [X]
 - File: `src/cli/commands/watch.ts`
 - Handle: Ctrl+C signal
 - Stop: Watcher cleanly
@@ -173,18 +173,18 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] Integration
 
-**T022** Connect watcher to incremental indexer [X]
+**T022** [X] Connect watcher to incremental indexer [X]
 - File: `src/services/watcher/FileWatcher.ts`
 - Wire: BatchProcessor to IncrementalIndexer
 - Handle: All event types (create, modify, delete, rename)
 
-**T023** Add memory monitoring to watcher [X]
+**T023** [X] Add memory monitoring to watcher [X]
 - File: `src/services/watcher/FileWatcher.ts`
 - Monitor: Memory usage every 30 seconds
 - Warn: At 400MB threshold
 - Implement: Backpressure when queue > 10,000 events
 
-**T024** [P] Implement watcher status reporting [X]
+**T024** [X] [P] [X] Implement watcher status reporting [X]
 - File: `src/cli/utils/WatcherStatusReporter.ts`
 - Display: Files being processed
 - Show: Batch progress
@@ -192,31 +192,31 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] Testing
 
-**T025** [P] Unit test DebounceManager
+**T025** [X] [P] [X] Unit test DebounceManager
 - File: `tests/unit/DebounceManager.test.ts`
 - Test: Event coalescing logic
 - Verify: Timer behavior
 - Check: Batch size limits
 
-**T026** [P] Unit test IgnorePatterns
+**T026** [X] [P] [X] Unit test IgnorePatterns
 - File: `tests/unit/IgnorePatterns.test.ts`
 - Test: Pattern matching
 - Verify: Default patterns work
 - Check: Custom pattern addition
 
-**T027** [P] Integration test file watching
+**T027** [X] [P] [X] Integration test file watching
 - File: `tests/integration/watcher-indexing.test.ts`
 - Create: Temporary directory
 - Make: Various file changes
 - Verify: Index updates correctly
 
-**T028** [P] Contract test watch command
+**T028** [X] [P] [X] Contract test watch command
 - File: `tests/contract/watcher.test.ts`
 - Test: CLI interface
 - Verify: Argument parsing
 - Check: Output format
 
-**T029** Performance test with large file sets
+**T029** [X] Performance test with large file sets
 - File: `tests/performance/watcher-burst.test.ts`
 - Generate: 1000+ file changes
 - Verify: Batch processing
@@ -242,7 +242,7 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US2] Core Models
 
-**T030** [P] Implement CommitDiff model
+**T030** [X] [P] [X] Implement CommitDiff model [X]
 - File: `src/models/CommitDiff.ts`
 - Define: Interface for diff representation
 - Include: ChangedFile interface with status
@@ -250,19 +250,19 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US2] Git Services
 
-**T031** Implement GitDiffReader service
+**T031** [X] Implement GitDiffReader service [X]
 - File: `src/services/git/GitDiffReader.ts`
 - Use: simple-git library
 - Parse: git diff output (--name-status)
 - Handle: Various diff formats
 
-**T032** Add Git repository detection
+**T032** [X] Add Git repository detection [X]
 - File: `src/services/git/GitRepository.ts`
 - Detect: .git directory
 - Check: Repository status
 - Handle: Detached HEAD state
 
-**T033** Implement changed files processor
+**T033** [X] Implement changed files processor [X]
 - File: `src/services/git/ChangedFilesProcessor.ts`
 - Get: Files from last commit
 - Map: To FileChangeEvents
@@ -270,19 +270,19 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US2] CLI Integration
 
-**T034** Add --changed flag to refresh command
+**T034** [X] Add --changed flag to refresh command [X]
 - File: `src/cli/commands/refresh.ts`
 - Parse: --changed flag
 - Call: GitDiffReader for last commit
 - Process: Changed files only
 
-**T035** Add --git-range option support
+**T035** [X] Add --git-range option support [X]
 - File: `src/cli/commands/refresh.ts`
 - Parse: Range like "HEAD~3..HEAD"
 - Support: Branch names and commit SHAs
 - Validate: Range format
 
-**T036** [P] Add dry-run mode for changed
+**T036** [X] [P] [X] Add dry-run mode for changed [X]
 - File: `src/cli/commands/refresh.ts`
 - Support: --dry-run flag
 - Display: What would be indexed
@@ -290,25 +290,25 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US2] Testing
 
-**T037** [P] Unit test GitDiffReader
+**T037** [X] [P] [X] Unit test GitDiffReader
 - File: `tests/unit/GitDiffReader.test.ts`
 - Mock: simple-git responses
 - Test: Diff parsing
 - Verify: Status detection
 
-**T038** Integration test changed mode
+**T038** [X] Integration test changed mode
 - File: `tests/integration/changed-mode.test.ts`
 - Create: Git repository
 - Make: Commits with changes
 - Verify: Correct files indexed
 
-**T039** Test edge cases
+**T039** [X] Test edge cases
 - File: `tests/integration/git-edge-cases.test.ts`
 - Test: Detached HEAD
 - Test: Empty repository
 - Test: No changes
 
-**T040** [P] Contract test refresh --changed
+**T040** [X] [P] [X] Contract test refresh --changed
 - File: `tests/contract/refresh-changed.test.ts`
 - Verify: CLI interface
 - Check: Output format
@@ -334,7 +334,7 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US3] Core Models
 
-**T041** [P] Implement GitHookConfiguration model
+**T041** [P] [X] Implement GitHookConfiguration model
 - File: `src/models/GitHookConfiguration.ts`
 - Define: Hook configuration interface
 - Include: GitHookType enum
@@ -342,27 +342,27 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US3] Hook Management
 
-**T042** Implement GitHooks service
+**T042** [X] Implement GitHooks service
 - File: `src/services/git/GitHooks.ts`
 - Generate: Hook scripts
 - Install: To .git/hooks/
 - Preserve: Existing hook content
 
-**T043** Create hook script templates
+**T043** [X] Create hook script templates
 - File: `src/services/git/HookTemplates.ts`
 - Define: post-merge script
 - Define: post-checkout script
 - Define: post-rewrite script
 - Ensure: Non-blocking with timeout
 
-**T044** Implement hook installer
+**T044** [X] Implement hook installer
 - File: `src/services/git/HookInstaller.ts`
 - Check: Existing hooks
 - Append: Our hook code
 - Mark: With identifier comment
 - Make: Executable (chmod 755)
 
-**T045** [P] Implement hook uninstaller
+**T045** [X] [P] [X] Implement hook uninstaller
 - File: `src/services/git/HookUninstaller.ts`
 - Detect: Our hook markers
 - Remove: Our code only
@@ -370,19 +370,19 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US3] CLI Commands
 
-**T046** Implement hooks install command
+**T046** [X] Implement hooks install command
 - File: `src/cli/commands/hooks.ts`
 - Parse: Action (install/uninstall/status)
 - Support: --hooks flag for specific hooks
 - Handle: --force reinstall option
 
-**T047** Add hooks status command
+**T047** [X] Add hooks status command
 - File: `src/cli/commands/hooks.ts`
 - Check: Each hook installation
 - Display: Version and status
 - Show: Last execution info
 
-**T048** Add hooks uninstall command
+**T048** [X] Add hooks uninstall command
 - File: `src/cli/commands/hooks.ts`
 - Remove: Specified hooks
 - Clean: Hook scripts
@@ -390,7 +390,7 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US3] Hook Execution
 
-**T049** Implement hook execution handler
+**T049** [X] Implement hook execution handler
 - File: `src/services/git/HookExecutor.ts`
 - Parse: Hook parameters
 - Get: Changed files from range

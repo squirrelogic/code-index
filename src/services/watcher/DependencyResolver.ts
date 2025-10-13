@@ -89,7 +89,7 @@ export class DependencyResolver {
    * @param fileDir Directory of the file
    * @returns Array of dependency paths
    */
-  private parseJavaScriptDependencies(content: string, fileDir: string): string[] {
+  private parseJavaScriptDependencies(content: string, _fileDir: string): string[] {
     const dependencies: string[] = [];
 
     // ES6 imports: import ... from '...'

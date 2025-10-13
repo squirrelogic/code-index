@@ -10,7 +10,7 @@ import {
 import { WatcherConfig } from '../../models/WatcherConfig.js';
 import { DebounceManager } from './DebounceManager.js';
 import { IgnorePatterns } from './IgnorePatterns.js';
-import { FileSystemUtils } from '../../lib/FileSystemUtils.js';
+import { getCanonicalPath } from '../../lib/FileSystemUtils.js';
 import { WatcherLogger } from '../../cli/utils/WatcherLogger.js';
 
 /**
@@ -90,7 +90,7 @@ export class FileWatcher extends EventEmitter {
         }
         return this.ignorePatterns.shouldIgnore(relativePath);
       },
-      depth: this.config.maxDepth,
+      depth: this.config.depth,
       usePolling: false,
       interval: 100,
       binaryInterval: 300,
@@ -202,7 +202,7 @@ export class FileWatcher extends EventEmitter {
         // Can't resolve canonical path for deleted files
         canonicalPath = filePath;
       } else {
-        canonicalPath = await FileSystemUtils.getCanonicalPath(filePath);
+        canonicalPath = await getCanonicalPath(filePath);
       }
 
       // Create event
@@ -258,7 +258,7 @@ export class FileWatcher extends EventEmitter {
       if (type === FileChangeType.DELETE) {
         canonicalPath = dirPath;
       } else {
-        canonicalPath = await FileSystemUtils.getCanonicalPath(dirPath);
+        canonicalPath = await getCanonicalPath(dirPath);
       }
 
       // Create event
