@@ -1,0 +1,34 @@
+{
+  "$schema": "../../schemas/watcher-config.schema.json",
+  "description": "Configuration for projects on network drives or slow filesystems",
+  "debounceDelay": 2000,
+  "batchSize": 50,
+  "maxQueueSize": 1000,
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/.codeindex/**",
+    "**/*.log"
+  ],
+  "watchOptions": {
+    "followSymlinks": true,
+    "usePolling": true,
+    "interval": 5000,
+    "binaryInterval": 10000,
+    "awaitWriteFinish": {
+      "stabilityThreshold": 2000,
+      "pollInterval": 500
+    }
+  },
+  "performance": {
+    "memoryThresholdMb": 300,
+    "backpressureEnabled": true
+  },
+  "notes": [
+    "usePolling=true is required for network drives where native file events are unreliable",
+    "Higher interval values reduce network traffic",
+    "Larger stabilityThreshold accounts for slower write speeds"
+  ]
+}

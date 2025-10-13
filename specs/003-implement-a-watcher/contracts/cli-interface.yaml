@@ -1,0 +1,392 @@
+openapi: 3.0.0
+info:
+  title: code-index File Watcher CLI Interface
+  version: 1.0.0
+  description: |
+    CLI contract for file watcher and Git hooks functionality in code-index tool.
+    This defines the command-line interface for watching files and managing Git hooks.
+
+paths:
+  /watch:
+    post:
+      summary: Start file system watcher for automatic reindexing
+      operationId: watchCommand
+      description: |
+        Monitors the project directory for file changes and triggers incremental
+        reindexing after a debounce period. Handles create, modify, rename, and
+        delete events while respecting ignore patterns.
+
+      parameters:
+        - name: project-dir
+          in: path
+          required: false
+          schema:
+            type: string
+            default: "."
+          description: Project directory to watch (defaults to current directory)
+
+        - name: --delay
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 100
+            maximum: 10000
+            default: 500
+          description: Debounce delay in milliseconds
+
+        - name: --batch-size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Maximum files to process per batch
+
+        - name: --ignore
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          description: Additional ignore patterns (glob syntax)
+          example: ["*.tmp", "temp/*", "*.bak"]
+
+        - name: --follow-symlinks
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: true
+          description: Whether to follow symbolic links
+
+        - name: --max-depth
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+          description: Maximum directory depth to watch
+
+        - name: --extensions
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+          description: File extensions to watch (e.g., js,ts,py)
+          example: ["js", "ts", "jsx", "tsx"]
+
+        - name: --verbose
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Show detailed processing information
+
+      responses:
+        '0':
+          description: Watcher started successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  Starting file watcher...
+                  Watching: /path/to/project
+                  Debounce delay: 500ms
+                  Batch size: 100 files
+                  Ignoring: node_modules/, dist/, build/, .git/, .codeindex/
+
+                  [2025-01-10 10:30:45] Detected changes:
+                    - Modified: src/index.ts
+                    - Created: src/utils/helper.ts
+                  [2025-01-10 10:30:45] Processing batch of 2 files...
+                  [2025-01-10 10:30:46] Successfully indexed 2 files
+
+                  Press Ctrl+C to stop watching
+
+        '1':
+          description: Failed to start watcher
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Error: Project directory not found: /invalid/path"
+
+  /refresh:
+    post:
+      summary: Refresh index for changed files
+      operationId: refreshCommand
+      description: |
+        Updates the index for files that have changed. Supports multiple modes:
+        - Default: Detect and index all changed files since last index
+        - --changed: Index files changed in last Git commit
+        - --git-range: Index files changed between Git refs
+
+      parameters:
+        - name: --changed
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Index files changed in last Git commit
+
+        - name: --git-range
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^.+\.\..+$'
+          description: Git range to process (e.g., HEAD~3..HEAD)
+          example: "main..feature-branch"
+
+        - name: --dry-run
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Show what would be indexed without making changes
+
+        - name: --force
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Force reindex even if files haven't changed
+
+      responses:
+        '0':
+          description: Refresh completed successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  Detecting changed files...
+                  Found 15 changed files since last index
+
+                  Processing:
+                    - Added: 3 files
+                    - Modified: 10 files
+                    - Deleted: 2 files
+
+                  Successfully refreshed index in 1.2s
+
+            application/json:
+              schema:
+                type: object
+                properties:
+                  added:
+                    type: array
+                    items:
+                      type: string
+                  modified:
+                    type: array
+                    items:
+                      type: string
+                  deleted:
+                    type: array
+                    items:
+                      type: string
+                  duration:
+                    type: number
+                  success:
+                    type: boolean
+
+        '1':
+          description: Refresh failed
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Error: Not a Git repository"
+
+  /hooks:
+    post:
+      summary: Manage Git hooks for automatic indexing
+      operationId: hooksCommand
+      description: Install, uninstall, or check status of Git hooks
+
+      parameters:
+        - name: action
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [install, uninstall, status]
+          description: Action to perform
+
+        - name: --hooks
+          in: query
+          required: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [post-merge, post-checkout, post-rewrite]
+          description: Specific hooks to manage (defaults to all)
+
+        - name: --force
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: Force reinstall even if hooks exist
+
+      responses:
+        '0':
+          description: Hook operation successful
+          content:
+            text/plain:
+              schema:
+                type: string
+                examples:
+                  install:
+                    value: |
+                      Installing Git hooks...
+                      ✓ Installed post-merge hook
+                      ✓ Installed post-checkout hook
+                      ✓ Installed post-rewrite hook
+
+                      Git hooks successfully installed.
+                      These hooks will automatically refresh the index after Git operations.
+
+                  uninstall:
+                    value: |
+                      Removing Git hooks...
+                      ✓ Removed post-merge hook
+                      ✓ Removed post-checkout hook
+                      ✓ Removed post-rewrite hook
+
+                      Git hooks successfully removed.
+
+                  status:
+                    value: |
+                      Git hooks status:
+                      ✓ post-merge: installed (v1.0.0)
+                      ✓ post-checkout: installed (v1.0.0)
+                      ✗ post-rewrite: not installed
+
+        '1':
+          description: Hook operation failed
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Error: Not a Git repository"
+
+components:
+  schemas:
+    FileChangeEvent:
+      type: object
+      properties:
+        path:
+          type: string
+          description: File path relative to project root
+        type:
+          type: string
+          enum: [create, modify, delete, rename]
+        timestamp:
+          type: integer
+          description: Unix timestamp when detected
+      required:
+        - path
+        - type
+        - timestamp
+
+    WatcherStatus:
+      type: object
+      properties:
+        watching:
+          type: boolean
+        startedAt:
+          type: integer
+        eventsProcessed:
+          type: integer
+        eventsSkipped:
+          type: integer
+        eventsFailed:
+          type: integer
+        memoryUsage:
+          type: integer
+          description: Memory usage in bytes
+
+    RefreshResult:
+      type: object
+      properties:
+        filesProcessed:
+          type: integer
+        filesAdded:
+          type: array
+          items:
+            type: string
+        filesModified:
+          type: array
+          items:
+            type: string
+        filesDeleted:
+          type: array
+          items:
+            type: string
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              file:
+                type: string
+              error:
+                type: string
+        duration:
+          type: number
+          description: Processing time in seconds
+
+    GitHookStatus:
+      type: object
+      properties:
+        name:
+          type: string
+          enum: [post-merge, post-checkout, post-rewrite]
+        installed:
+          type: boolean
+        version:
+          type: string
+        path:
+          type: string
+
+  parameters:
+    JsonOutput:
+      name: --json
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+      description: Output results in JSON format
+
+    Quiet:
+      name: --quiet
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+      description: Suppress non-error output
+
+tags:
+  - name: watcher
+    description: File system watching operations
+  - name: refresh
+    description: Index refresh operations
+  - name: hooks
+    description: Git hook management

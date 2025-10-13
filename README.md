@@ -8,6 +8,8 @@ A fast, offline TypeScript/Node.js CLI tool for local code indexing and search u
 - 🔍 **Instant Search** - Full-text and regex search with <100ms response time
 - 💾 **Offline First** - All data stored locally in SQLite
 - 🔄 **Incremental Updates** - Refresh only changed files
+- 👀 **File Watcher** - Real-time index updates with debounced change detection
+- 🪝 **Git Hooks** - Automatic indexing after merge, checkout, and rebase
 - 🏥 **Self-Diagnostic** - Built-in health checks with auto-fix capabilities
 - 📦 **Zero Dependencies** - Minimal runtime dependencies
 
@@ -146,6 +148,85 @@ code-index doctor
 code-index doctor --fix
 ```
 
+### `code-index watch`
+
+Watch file system for changes and automatically update the index in real-time.
+
+**Options:**
+- `--delay <ms>` - Debounce delay in milliseconds (default: 500)
+- `--batch-size <n>` - Number of files to process per batch (default: 100)
+- `--ignore <pattern>` - Additional patterns to ignore
+- `--max-depth <n>` - Limit directory recursion depth
+- `--extensions <list>` - Comma-separated list of file extensions to watch
+- `-v, --verbose` - Show detailed progress information
+- `-j, --json` - Output results in JSON format
+
+**Examples:**
+```bash
+# Start watching with default settings
+code-index watch
+
+# Watch with custom debounce delay
+code-index watch --delay 1000
+
+# Watch only specific file types
+code-index watch --extensions js,ts,py
+
+# Watch with depth limit (good for large projects)
+code-index watch --max-depth 5 --ignore "test/*"
+```
+
+### `code-index hooks`
+
+Manage Git hooks for automatic indexing after Git operations.
+
+**Subcommands:**
+- `install` - Install Git hooks
+- `uninstall` - Remove Git hooks
+- `status` - Show hook installation status
+
+**Options:**
+- `--hooks <list>` - Comma-separated list of hooks to install (post-merge, post-checkout, post-rewrite)
+- `--force` - Force reinstall hooks
+- `-j, --json` - Output results in JSON format
+
+**Examples:**
+```bash
+# Install all hooks (recommended)
+code-index hooks install
+
+# Install specific hooks
+code-index hooks install --hooks post-merge,post-checkout
+
+# Check hook status
+code-index hooks status
+
+# Remove all hooks
+code-index hooks uninstall
+```
+
+### `code-index diagnose`
+
+Run comprehensive diagnostics and suggest fixes for common issues.
+
+**Options:**
+- `--fix` - Attempt to automatically fix detected issues
+- `--report` - Generate a full diagnostic report
+- `-v, --verbose` - Show detailed diagnostic information
+- `-j, --json` - Output results in JSON format
+
+**Examples:**
+```bash
+# Check system health
+code-index diagnose
+
+# Auto-fix detected issues
+code-index diagnose --fix
+
+# Generate diagnostic report
+code-index diagnose --report
+```
+
 ### `code-index uninstall`
 
 Remove all code-index artifacts from your project.
@@ -259,6 +340,24 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
 MIT © [Squirrel Logic]
 
 ## Changelog
+
+### 2.0.0
+- **New Features:**
+  - File watcher with real-time index updates
+  - Debounced change detection (500ms default)
+  - Git hooks support (post-merge, post-checkout, post-rewrite)
+  - Enhanced diagnostics command with auto-fix
+  - Performance benchmarking utilities
+  - Telemetry collection (respects privacy)
+- **Commands:**
+  - `watch` - Real-time file system monitoring
+  - `hooks` - Git hook management
+  - `diagnose` - Comprehensive system diagnostics
+- **Improvements:**
+  - Better memory management for large projects
+  - Dependency-aware file processing
+  - Improved error handling with retry logic
+  - Health checks for watcher and database
 
 ### 1.0.0
 - Initial release

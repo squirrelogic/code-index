@@ -1,0 +1,26 @@
+{
+  "$schema": "../../schemas/watcher-config.schema.json",
+  "description": "Basic file watcher configuration for small to medium projects",
+  "debounceDelay": 500,
+  "batchSize": 100,
+  "maxQueueSize": 10000,
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/.codeindex/**",
+    "**/*.log",
+    "**/tmp/**",
+    "**/.next/**",
+    "**/.cache/**"
+  ],
+  "watchOptions": {
+    "followSymlinks": true,
+    "usePolling": false,
+    "awaitWriteFinish": {
+      "stabilityThreshold": 200,
+      "pollInterval": 100
+    }
+  }
+}
