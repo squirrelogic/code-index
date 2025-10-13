@@ -14,18 +14,91 @@ import type { Language } from '../../models/ParseResult.js';
  * @returns Detected language
  * @throws Error if extension is not supported
  */
-export function detectLanguage(_filePath: string): Language {
-  // TODO: Implement language detection (T006)
-  throw new Error('Language detection not yet implemented');
+export function detectLanguage(filePath: string): Language {
+  // Extract file extension
+  const extension = filePath.toLowerCase().match(/\.([^.]+)$/)?.[1];
+
+  if (!extension) {
+    throw new Error(`Unable to determine file extension from path: ${filePath}`);
+  }
+
+  // Map extension to language
+  const languageMap: Record<string, Language> = {
+    'js': 'javascript',
+    'jsx': 'javascript',  // JSX support built into javascript grammar
+    'ts': 'typescript',
+    'tsx': 'tsx',         // Separate TSX grammar in tree-sitter-typescript package
+    'py': 'python',
+  };
+
+  const language = languageMap[extension];
+
+  if (!language) {
+    const supported = Object.keys(languageMap).join(', ');
+    throw new Error(
+      `Unsupported file extension: .${extension}. Supported extensions: ${supported}`
+    );
+  }
+
+  return language;
 }
+
+// Grammar cache to avoid reloading
+const grammarCache = new Map<Language, any>();
 
 /**
  * Load Tree-sitter grammar for detected language
  *
  * @param language - Language to load grammar for
  * @returns Tree-sitter language grammar
+ * @throws Error if grammar fails to load
  */
-export function loadGrammar(_language: Language): any {
-  // TODO: Implement grammar loading with caching (T007)
-  throw new Error('Grammar loading not yet implemented');
+export async function loadGrammar(language: Language): Promise<any> {
+  // Return cached grammar if available
+  const cached = grammarCache.get(language);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    let grammar: any;
+
+    // Lazy load appropriate grammar package
+    switch (language) {
+      case 'javascript': {
+        const JavaScript = await import('tree-sitter-javascript');
+        grammar = JavaScript.default;
+        break;
+      }
+      case 'typescript': {
+        const TypeScript = (await import('tree-sitter-typescript')).default;
+        grammar = TypeScript.typescript;
+        break;
+      }
+      case 'tsx': {
+        const TSX = (await import('tree-sitter-typescript')).default;
+        grammar = TSX.tsx;
+        break;
+      }
+      case 'python': {
+        const Python = await import('tree-sitter-python');
+        grammar = Python.default;
+        break;
+      }
+      default: {
+        throw new Error(`No grammar available for language: ${language}`);
+      }
+    }
+
+    // Cache the grammar for future use
+    grammarCache.set(language, grammar);
+
+    return grammar;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Failed to load grammar for ${language}: ${errorMessage}. ` +
+      `Ensure tree-sitter grammar package is installed.`
+    );
+  }
 }

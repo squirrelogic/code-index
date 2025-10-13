@@ -5,6 +5,9 @@
  * for TypeScript, JavaScript, JSX, TSX, and Python files.
  */
 
+import { promises as fs } from 'fs';
+import { detectLanguage, loadGrammar } from './LanguageLoader.js';
+import { TreeSitterParser } from './TreeSitterParser.js';
 import type { ParseResult } from '../../models/ParseResult.js';
 
 /**
@@ -32,11 +35,71 @@ export interface ParseOptions {
  * @returns Complete parse result with all extracted entities
  */
 export async function parse(
-  _filePath: string,
-  _options?: ParseOptions
+  filePath: string,
+  options?: ParseOptions
 ): Promise<ParseResult> {
-  // TODO: Implementation will be added in subsequent tasks
-  throw new Error('Parser not yet implemented');
+  const startTime = Date.now();
+
+  try {
+    // 1. Detect language from file path (before reading file)
+    const language = detectLanguage(filePath);
+
+    // 2. Read file content (or use provided content)
+    const source = options?.content !== undefined
+      ? options.content
+      : await fs.readFile(filePath, 'utf-8');
+
+    // 3. Load grammar for detected language
+    const grammar = await loadGrammar(language);
+
+    // 4. Initialize Tree-sitter parser
+    const parser = new TreeSitterParser();
+    parser.setLanguage(grammar);
+
+    // 5. Parse source code
+    const tree = parser.parse(source);
+
+    // 6. Extract syntax errors (with recovery info)
+    const errors = parser.extractErrors(tree, source);
+
+    // 7. Count lines and file size
+    const lines = source.split('\n');
+    const lineCount = lines.length;
+    const fileSize = Buffer.byteLength(source, 'utf-8');
+
+    // 8. Calculate parse duration
+    const duration = Date.now() - startTime;
+
+    // 9. Create ParseResult with metadata
+    // Note: symbols, imports, exports, calls, comments will be empty arrays for now
+    // They will be populated in subsequent phases (US1-US4)
+    const result: ParseResult = {
+      path: filePath,
+      language,
+      symbols: [],
+      imports: [],
+      exports: [],
+      calls: [],
+      comments: [],
+      errors,
+      metadata: {
+        parsedAt: new Date().toISOString(),
+        duration,
+        lineCount,
+        fileSize,
+        incremental: options?.incremental ?? false,
+        parserVersion: '1.0.0',
+      },
+    };
+
+    // Clean up parser resources
+    parser.cleanup();
+
+    return result;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse ${filePath}: ${errorMessage}`);
+  }
 }
 
 // Re-export all types from ParseResult for convenience
