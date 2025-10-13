@@ -9,6 +9,24 @@ import Parser from 'tree-sitter';
 import type { SyntaxError, ErrorSeverity } from '../../models/ParseResult.js';
 
 /**
+ * Represents an edit to source code for incremental parsing
+ */
+export interface Edit {
+  /** Byte offset where the edit starts */
+  startIndex: number;
+  /** Byte offset where the old content ends */
+  oldEndIndex: number;
+  /** Byte offset where the new content ends */
+  newEndIndex: number;
+  /** Starting position in old tree */
+  startPosition: Parser.Point;
+  /** Ending position in old tree */
+  oldEndPosition: Parser.Point;
+  /** Ending position in new tree */
+  newEndPosition: Parser.Point;
+}
+
+/**
  * Tree-sitter parser wrapper class
  */
 export class TreeSitterParser {
@@ -60,6 +78,45 @@ export class TreeSitterParser {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(`Parse failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Parse source code incrementally using an old tree for better performance
+   *
+   * This method is significantly faster than full reparse for small edits,
+   * achieving 10x+ speedup in many cases.
+   *
+   * @param source - New source code to parse
+   * @param oldTree - Previous syntax tree
+   * @param edits - Array of edits applied since oldTree was created
+   * @returns New syntax tree with incremental updates
+   */
+  parseIncremental(source: string, oldTree: Parser.Tree, edits: Edit[]): Parser.Tree {
+    try {
+      // Apply edits to the old tree
+      for (const edit of edits) {
+        oldTree.edit(edit);
+      }
+
+      // Calculate appropriate buffer size
+      const bufferSize = source.length < 32768 ? 65536 : source.length * 2;
+
+      // Parse with the edited tree as a hint
+      // Tree-sitter will reuse unchanged portions of the tree
+      const newTree = this.parser.parse(source, oldTree, { bufferSize });
+
+      if (!newTree) {
+        throw new Error('Incremental parse returned null tree');
+      }
+
+      // Store new tree
+      this.currentTree = newTree;
+
+      return newTree;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Incremental parse failed: ${errorMessage}`);
     }
   }
 
