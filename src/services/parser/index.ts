@@ -9,6 +9,9 @@ import { promises as fs } from 'fs';
 import { detectLanguage, loadGrammar } from './LanguageLoader.js';
 import { TreeSitterParser } from './TreeSitterParser.js';
 import { extractSymbols } from './SymbolExtractor.js';
+import { extractImports, extractExports } from './ImportExportExtractor.js';
+import { extractComments } from './CommentExtractor.js';
+import { extractCalls } from './CallGraphExtractor.js';
 import type { ParseResult } from '../../models/ParseResult.js';
 
 /**
@@ -66,24 +69,44 @@ export async function parse(
     // 7. Extract symbols (T019)
     const symbols = extractSymbols(tree, source);
 
-    // 8. Count lines and file size
+    // 8. Extract imports and exports (T028)
+    const imports = extractImports(tree, source);
+    const exports = extractExports(tree, source);
+
+    // 9. Extract comments and documentation (T036)
+    const comments = extractComments(tree, source, symbols);
+
+    // 10. Associate documentation with symbols
+    // Update symbol.documentation field for symbols with associated comments
+    for (const comment of comments) {
+      if (comment.associatedSymbol) {
+        const symbol = symbols.find(s => s.name === comment.associatedSymbol);
+        if (symbol) {
+          symbol.documentation = comment.text;
+        }
+      }
+    }
+
+    // 11. Extract function calls (T042)
+    const calls = extractCalls(tree, source);
+
+    // 12. Count lines and file size
     const lines = source.split('\n');
     const lineCount = lines.length;
     const fileSize = Buffer.byteLength(source, 'utf-8');
 
-    // 9. Calculate parse duration
+    // 13. Calculate parse duration
     const duration = Date.now() - startTime;
 
-    // 10. Create ParseResult with metadata
-    // Note: imports, exports, calls, comments will be populated in subsequent phases (US2-US4)
+    // 14. Create ParseResult with metadata
     const result: ParseResult = {
       path: filePath,
       language,
       symbols,
-      imports: [],
-      exports: [],
-      calls: [],
-      comments: [],
+      imports,
+      exports,
+      calls,
+      comments,
       errors,
       metadata: {
         parsedAt: new Date().toISOString(),
