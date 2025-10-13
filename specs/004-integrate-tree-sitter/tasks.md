@@ -350,9 +350,9 @@ Implement:
 - Language-specific node type variations (TS vs JS vs Python)
 
 **Verification**:
-- [ ] Identifies all 14 symbol kinds
-- [ ] Works across TypeScript, JavaScript, Python
-- [ ] Ignores non-symbol nodes (expressions, statements)
+- [X] Identifies all 14 symbol kinds
+- [X] Works across TypeScript, JavaScript, Python
+- [X] Ignores non-symbol nodes (expressions, statements)
 
 **Dependencies**: T010
 
@@ -370,10 +370,10 @@ Implement:
 - Handle constructor methods
 
 **Verification**:
-- [ ] Extracts `add` from `function add(a, b) {}`
-- [ ] Extracts `MyClass` from `class MyClass {}`
-- [ ] Handles `constructor` for constructors
-- [ ] Returns fallback name for anonymous functions
+- [X] Extracts `add` from `function add(a, b) {}`
+- [X] Extracts `MyClass` from `class MyClass {}`
+- [X] Handles `constructor` for constructors
+- [X] Returns fallback name for anonymous functions
 
 **Dependencies**: T012
 
@@ -394,10 +394,10 @@ Implement:
 - Validate span (start < end)
 
 **Verification**:
-- [ ] Correct line numbers (1-indexed)
-- [ ] Correct column numbers (0-indexed)
-- [ ] Correct byte offsets
-- [ ] End positions after start positions
+- [X] Correct line numbers (1-indexed)
+- [X] Correct column numbers (0-indexed)
+- [X] Correct byte offsets
+- [X] End positions after start positions
 
 **Dependencies**: T012
 
@@ -415,10 +415,10 @@ Implement:
 - Top-level symbols return empty array
 
 **Verification**:
-- [ ] Top-level function: `parents: []`
-- [ ] Method in class: `parents: ['ClassName']`
-- [ ] Nested function: `parents: ['OuterFunction', 'InnerFunction']`
-- [ ] Python class method: `parents: ['ClassName']`
+- [X] Top-level function: `parents: []`
+- [X] Method in class: `parents: ['ClassName']`
+- [X] Nested function: `parents: ['OuterFunction', 'InnerFunction']`
+- [X] Python class method: `parents: ['ClassName']`
 
 **Dependencies**: T013
 
@@ -437,10 +437,10 @@ Implement:
 - Return null for non-callable symbols
 
 **Verification**:
-- [ ] TypeScript: `function add(a: number, b: number): number`
-- [ ] JavaScript: `function add(a, b)`
-- [ ] Python: `def add(a: int, b: int) -> int`
-- [ ] Class declaration: `null`
+- [X] TypeScript: `function add(a: number, b: number): number`
+- [X] JavaScript: `function add(a, b)`
+- [X] Python: `def add(a: int, b: int) -> int`
+- [X] Class declaration: `null`
 
 **Dependencies**: T013
 
@@ -460,11 +460,11 @@ Implement:
 - Extract decorators (TypeScript/Python)
 
 **Verification**:
-- [ ] `export function foo()` → `exported: true`
-- [ ] `async function foo()` → `async: true`
-- [ ] `static method()` → `static: true`
-- [ ] `private field` → `visibility: 'private'`
-- [ ] `@decorator` → `decorators: ['decorator']`
+- [X] `export function foo()` → `exported: true`
+- [X] `async function foo()` → `async: true`
+- [X] `static method()` → `static: true`
+- [X] `private field` → `visibility: 'private'`
+- [X] `@decorator` → `decorators: ['decorator']`
 
 **Dependencies**: T013
 
@@ -485,11 +485,11 @@ Implement:
 - Return array of all symbols
 
 **Verification**:
-- [ ] Extracts all symbols from fixture files
-- [ ] Correct symbol counts (functions, classes, variables)
-- [ ] Parent relationships correct
-- [ ] Signatures extracted for callables
-- [ ] Metadata correct (exported, async, etc.)
+- [X] Extracts all symbols from fixture files
+- [X] Correct symbol counts (functions, classes, variables)
+- [X] Parent relationships correct
+- [X] Signatures extracted for callables
+- [X] Metadata correct (exported, async, etc.)
 
 **Dependencies**: T013, T014, T015, T016, T017
 
@@ -507,10 +507,10 @@ Modify `parse()`:
 - Handle extraction errors gracefully
 
 **Verification**:
-- [ ] `parse('test.ts')` returns ParseResult with populated symbols
-- [ ] Symbol count matches expected for fixture
-- [ ] No extraction errors for well-formed code
-- [ ] Extraction works after syntax errors (partial parse)
+- [X] `parse('test.ts')` returns ParseResult with populated symbols
+- [X] Symbol count matches expected for fixture
+- [X] No extraction errors for well-formed code
+- [X] Extraction works after syntax errors (partial parse)
 
 **Dependencies**: T018
 
@@ -536,9 +536,9 @@ Test scenarios:
 12. Extract static method → metadata.static=true
 
 **Verification**:
-- [ ] All 12 tests pass
-- [ ] Tests cover all 14 symbol kinds
-- [ ] Tests cover TypeScript, JavaScript, Python
+- [X] All 19 tests pass (expanded coverage)
+- [X] Tests cover all 14 symbol kinds
+- [X] Tests cover TypeScript, JavaScript, Python
 
 **Dependencies**: T018
 
@@ -558,9 +558,9 @@ Test scenarios:
 6. Symbol accuracy → 99% of expected symbols extracted (SC-004)
 
 **Verification**:
-- [ ] All 6 tests pass
-- [ ] Uses fixture files from T005
-- [ ] Validates acceptance criteria from spec US1
+- [X] All 7 tests pass (expanded coverage)
+- [X] Uses fixture files from T005
+- [X] Validates acceptance criteria from spec US1
 
 **Dependencies**: T019
 
@@ -578,9 +578,9 @@ Test scenarios (from spec.md US1):
 4. **Given** file with syntax errors, **When** parsed, **Then** valid symbols before error still extracted
 
 **Verification**:
-- [ ] All 4 acceptance scenarios pass
-- [ ] Contract matches spec.md exactly
-- [ ] ParseResult structure matches data-model.md
+- [X] All 5 tests pass (4 acceptance scenarios + structure validation)
+- [X] Contract matches spec.md exactly
+- [X] ParseResult structure matches data-model.md
 
 **Dependencies**: T019
 
@@ -598,10 +598,10 @@ Benchmark scenarios:
 4. Parse 100 files → consistent performance (SC-010)
 
 **Verification**:
-- [ ] All benchmarks pass
-- [ ] Actual performance exceeds minimums
-- [ ] Memory stays within bounds
-- [ ] Results logged for tracking
+- [X] All 6 benchmarks pass
+- [X] Actual performance exceeds minimums (48k-66k L/s vs 1k minimum)
+- [X] Memory stays within bounds
+- [X] Results logged for tracking
 
 **Dependencies**: T019
 
