@@ -1,0 +1,891 @@
+openapi: 3.0.3
+info:
+  title: Tree-sitter Parser API
+  description: |
+    Contract for the Tree-sitter parser service that provides structured code analysis
+    for TypeScript, JavaScript, JSX, TSX, and Python files.
+
+    This API defines the parser module interface used by the code-index indexer service.
+  version: 1.0.0
+  contact:
+    name: code-index project
+    url: https://github.com/squirrelogic/code-index
+
+tags:
+  - name: parsing
+    description: Core parsing operations
+  - name: incremental
+    description: Incremental parsing for performance
+  - name: language
+    description: Language detection and support
+
+paths:
+  /parse:
+    post:
+      summary: Parse a source file
+      description: |
+        Parses a source file and returns structured analysis including symbols,
+        imports/exports, function calls, comments, and syntax errors.
+
+        Uses syntax-level error recovery to continue parsing after errors.
+      operationId: parseFile
+      tags:
+        - parsing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParseRequest'
+            examples:
+              typescript:
+                summary: Parse TypeScript file
+                value:
+                  filePath: '/project/src/services/parser.ts'
+                  content: null
+                  options:
+                    incremental: false
+                    extractComments: true
+                    extractCalls: true
+              javascript:
+                summary: Parse JavaScript with content
+                value:
+                  filePath: '/project/src/utils.js'
+                  content: 'export function add(a, b) { return a + b; }'
+                  options:
+                    incremental: false
+                    extractComments: true
+                    extractCalls: true
+      responses:
+        '200':
+          description: Successfully parsed file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParseResult'
+              examples:
+                success:
+                  $ref: '#/components/examples/ParseResultSuccess'
+                with_errors:
+                  $ref: '#/components/examples/ParseResultWithErrors'
+        '400':
+          description: Invalid request (file not found, unsupported language)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal parser error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /parse/incremental:
+    post:
+      summary: Parse with incremental update
+      description: |
+        Reparse a file using incremental parsing based on edit information.
+        Requires previous parse tree and edit details. Achieves 10x+ speedup
+        for small changes (SC-006).
+      operationId: parseIncremental
+      tags:
+        - parsing
+        - incremental
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncrementalParseRequest'
+      responses:
+        '200':
+          description: Successfully reparsed file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParseResult'
+        '400':
+          description: Invalid incremental request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /languages:
+    get:
+      summary: Get supported languages
+      description: Returns list of supported languages and their file extensions.
+      operationId: getSupportedLanguages
+      tags:
+        - language
+      responses:
+        '200':
+          description: List of supported languages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  languages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LanguageInfo'
+              example:
+                languages:
+                  - language: 'typescript'
+                    extensions: ['.ts']
+                    grammarPackage: 'tree-sitter-typescript'
+                  - language: 'tsx'
+                    extensions: ['.tsx']
+                    grammarPackage: 'tree-sitter-tsx'
+                  - language: 'javascript'
+                    extensions: ['.js', '.jsx']
+                    grammarPackage: 'tree-sitter-javascript'
+                  - language: 'python'
+                    extensions: ['.py']
+                    grammarPackage: 'tree-sitter-python'
+
+  /languages/detect:
+    post:
+      summary: Detect language from file path
+      description: Determines language variant from file extension.
+      operationId: detectLanguage
+      tags:
+        - language
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - filePath
+              properties:
+                filePath:
+                  type: string
+                  description: File path to detect language from
+              example:
+                filePath: '/project/src/components/Button.tsx'
+      responses:
+        '200':
+          description: Language detected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  language:
+                    $ref: '#/components/schemas/Language'
+                  detected:
+                    type: boolean
+              example:
+                language: 'tsx'
+                detected: true
+        '400':
+          description: Unsupported file extension
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    ParseRequest:
+      type: object
+      required:
+        - filePath
+      properties:
+        filePath:
+          type: string
+          description: Absolute path to file to parse
+          example: '/project/src/services/parser.ts'
+        content:
+          type: string
+          nullable: true
+          description: File content (if null, read from filePath)
+        options:
+          $ref: '#/components/schemas/ParseOptions'
+
+    ParseOptions:
+      type: object
+      properties:
+        incremental:
+          type: boolean
+          default: false
+          description: Whether to use incremental parsing
+        extractComments:
+          type: boolean
+          default: true
+          description: Whether to extract comments
+        extractCalls:
+          type: boolean
+          default: true
+          description: Whether to extract function calls
+        generateHashes:
+          type: boolean
+          default: true
+          description: Whether to generate content hashes
+
+    IncrementalParseRequest:
+      type: object
+      required:
+        - filePath
+        - content
+        - previousTree
+        - edits
+      properties:
+        filePath:
+          type: string
+          description: Absolute path to file
+        content:
+          type: string
+          description: New file content after edits
+        previousTree:
+          type: string
+          description: Serialized previous parse tree (opaque)
+        edits:
+          type: array
+          items:
+            $ref: '#/components/schemas/Edit'
+          description: List of edits applied to file
+        options:
+          $ref: '#/components/schemas/ParseOptions'
+
+    Edit:
+      type: object
+      required:
+        - startIndex
+        - oldEndIndex
+        - newEndIndex
+        - startPosition
+        - oldEndPosition
+        - newEndPosition
+      properties:
+        startIndex:
+          type: integer
+          description: Byte offset where edit starts
+        oldEndIndex:
+          type: integer
+          description: Byte offset where edit ended (old content)
+        newEndIndex:
+          type: integer
+          description: Byte offset where edit ends (new content)
+        startPosition:
+          $ref: '#/components/schemas/Position'
+        oldEndPosition:
+          $ref: '#/components/schemas/Position'
+        newEndPosition:
+          $ref: '#/components/schemas/Position'
+
+    Position:
+      type: object
+      required:
+        - row
+        - column
+      properties:
+        row:
+          type: integer
+          description: Line number (0-indexed for Tree-sitter)
+        column:
+          type: integer
+          description: Column number (0-indexed)
+
+    ParseResult:
+      type: object
+      required:
+        - path
+        - language
+        - symbols
+        - imports
+        - exports
+        - calls
+        - comments
+        - errors
+        - metadata
+      properties:
+        path:
+          type: string
+          description: Absolute path to parsed file
+        language:
+          $ref: '#/components/schemas/Language'
+        symbols:
+          type: array
+          items:
+            $ref: '#/components/schemas/Symbol'
+        imports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportStatement'
+        exports:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExportStatement'
+        calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/FunctionCall'
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comment'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyntaxError'
+        metadata:
+          $ref: '#/components/schemas/ParseMetadata'
+
+    Language:
+      type: string
+      enum:
+        - javascript
+        - typescript
+        - jsx
+        - tsx
+        - python
+      description: Supported language variants
+
+    Symbol:
+      type: object
+      required:
+        - name
+        - kind
+        - span
+        - parents
+        - hash
+        - metadata
+      properties:
+        name:
+          type: string
+          description: Symbol identifier
+        kind:
+          $ref: '#/components/schemas/SymbolKind'
+        span:
+          $ref: '#/components/schemas/Span'
+        parents:
+          type: array
+          items:
+            type: string
+          description: Parent symbol names (scoping chain)
+        signature:
+          type: string
+          nullable: true
+          description: Function/method signature
+        documentation:
+          type: string
+          nullable: true
+          description: Associated documentation
+        hash:
+          type: string
+          pattern: '^[0-9a-f]{16}$'
+          description: Content hash (XXH64, 16-char hex)
+        metadata:
+          $ref: '#/components/schemas/SymbolMetadata'
+
+    SymbolKind:
+      type: string
+      enum:
+        - function
+        - class
+        - variable
+        - interface
+        - enum
+        - type
+        - constant
+        - method
+        - property
+        - module
+        - namespace
+        - parameter
+        - import
+        - export
+        - decorator
+      description: Complete taxonomy of symbol types
+
+    Span:
+      type: object
+      required:
+        - startLine
+        - startColumn
+        - endLine
+        - endColumn
+        - startByte
+        - endByte
+      properties:
+        startLine:
+          type: integer
+          minimum: 1
+          description: Starting line (1-indexed)
+        startColumn:
+          type: integer
+          minimum: 0
+          description: Starting column (0-indexed)
+        endLine:
+          type: integer
+          minimum: 1
+          description: Ending line (1-indexed)
+        endColumn:
+          type: integer
+          minimum: 0
+          description: Ending column (0-indexed)
+        startByte:
+          type: integer
+          minimum: 0
+          description: Starting byte offset
+        endByte:
+          type: integer
+          minimum: 0
+          description: Ending byte offset
+
+    SymbolMetadata:
+      type: object
+      required:
+        - exported
+      properties:
+        visibility:
+          type: string
+          enum: [public, private, protected, internal]
+          nullable: true
+        exported:
+          type: boolean
+          description: Whether symbol is exported
+        async:
+          type: boolean
+          nullable: true
+        static:
+          type: boolean
+          nullable: true
+        abstract:
+          type: boolean
+          nullable: true
+        typeAnnotation:
+          type: string
+          nullable: true
+        decorators:
+          type: array
+          items:
+            type: string
+
+    ImportStatement:
+      type: object
+      required:
+        - source
+        - kind
+        - specifiers
+        - span
+      properties:
+        source:
+          type: string
+          description: Source module path
+        kind:
+          $ref: '#/components/schemas/ImportKind'
+        specifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportSpecifier'
+        span:
+          $ref: '#/components/schemas/Span'
+
+    ImportKind:
+      type: string
+      enum:
+        - named
+        - default
+        - namespace
+        - side-effect
+        - dynamic
+        - require
+
+    ImportSpecifier:
+      type: object
+      required:
+        - imported
+        - local
+      properties:
+        imported:
+          type: string
+          description: Imported name from module
+        local:
+          type: string
+          description: Local binding name
+        typeOnly:
+          type: boolean
+          nullable: true
+
+    ExportStatement:
+      type: object
+      required:
+        - kind
+        - specifiers
+        - span
+      properties:
+        kind:
+          $ref: '#/components/schemas/ExportKind'
+        specifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExportSpecifier'
+        source:
+          type: string
+          nullable: true
+          description: Source module for re-exports
+        span:
+          $ref: '#/components/schemas/Span'
+
+    ExportKind:
+      type: string
+      enum:
+        - named
+        - default
+        - namespace
+        - declaration
+
+    ExportSpecifier:
+      type: object
+      required:
+        - local
+        - exported
+      properties:
+        local:
+          type: string
+          description: Local name being exported
+        exported:
+          type: string
+          description: Exported name
+        typeOnly:
+          type: boolean
+          nullable: true
+
+    FunctionCall:
+      type: object
+      required:
+        - callee
+        - kind
+        - argumentCount
+        - span
+      properties:
+        callee:
+          type: string
+          description: Function/method name
+        kind:
+          $ref: '#/components/schemas/CallKind'
+        receiver:
+          type: string
+          nullable: true
+          description: Object receiver for methods
+        argumentCount:
+          type: integer
+          minimum: 0
+        span:
+          $ref: '#/components/schemas/Span'
+        chain:
+          $ref: '#/components/schemas/CallChain'
+
+    CallKind:
+      type: string
+      enum:
+        - function
+        - method
+        - constructor
+        - super
+        - dynamic
+
+    CallChain:
+      type: object
+      required:
+        - position
+      properties:
+        previous:
+          type: string
+          nullable: true
+        next:
+          type: string
+          nullable: true
+        position:
+          type: integer
+          minimum: 0
+
+    Comment:
+      type: object
+      required:
+        - text
+        - kind
+        - span
+      properties:
+        text:
+          type: string
+          description: Comment text without delimiters
+        kind:
+          $ref: '#/components/schemas/CommentKind'
+        span:
+          $ref: '#/components/schemas/Span'
+        associatedSymbol:
+          type: string
+          nullable: true
+        documentation:
+          $ref: '#/components/schemas/DocumentationBlock'
+
+    CommentKind:
+      type: string
+      enum:
+        - line
+        - block
+        - jsdoc
+        - docstring
+
+    DocumentationBlock:
+      type: object
+      required:
+        - description
+      properties:
+        description:
+          type: string
+        params:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParamDoc'
+        returns:
+          type: string
+          nullable: true
+        throws:
+          type: array
+          items:
+            type: string
+        examples:
+          type: array
+          items:
+            type: string
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+
+    ParamDoc:
+      type: object
+      required:
+        - name
+        - description
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          nullable: true
+        description:
+          type: string
+        optional:
+          type: boolean
+          nullable: true
+
+    SyntaxError:
+      type: object
+      required:
+        - message
+        - span
+        - severity
+        - recovery
+      properties:
+        message:
+          type: string
+          description: Error message
+        span:
+          $ref: '#/components/schemas/Span'
+        severity:
+          type: string
+          enum: [error, warning]
+        recovery:
+          $ref: '#/components/schemas/ErrorRecovery'
+
+    ErrorRecovery:
+      type: object
+      required:
+        - recovered
+        - strategy
+        - symbolsAfterError
+      properties:
+        recovered:
+          type: boolean
+          description: Whether parser recovered
+        strategy:
+          type: string
+          enum:
+            - skip_statement
+            - skip_expression
+            - skip_to_delimiter
+            - none
+        symbolsAfterError:
+          type: integer
+          minimum: 0
+          description: Valid symbols extracted after error
+
+    ParseMetadata:
+      type: object
+      required:
+        - parsedAt
+        - duration
+        - lineCount
+        - fileSize
+        - incremental
+        - parserVersion
+      properties:
+        parsedAt:
+          type: string
+          format: date-time
+          description: Timestamp (ISO 8601)
+        duration:
+          type: number
+          description: Parse time (milliseconds)
+          minimum: 0
+        lineCount:
+          type: integer
+          minimum: 0
+        fileSize:
+          type: integer
+          minimum: 0
+          description: File size (bytes)
+        incremental:
+          type: boolean
+        parserVersion:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+          example: '1.0.0'
+
+    LanguageInfo:
+      type: object
+      required:
+        - language
+        - extensions
+        - grammarPackage
+      properties:
+        language:
+          $ref: '#/components/schemas/Language'
+        extensions:
+          type: array
+          items:
+            type: string
+          description: Supported file extensions
+        grammarPackage:
+          type: string
+          description: npm package name for grammar
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+
+  examples:
+    ParseResultSuccess:
+      summary: Successful parse result
+      value:
+        path: '/project/src/utils.ts'
+        language: 'typescript'
+        symbols:
+          - name: 'add'
+            kind: 'function'
+            span:
+              startLine: 1
+              startColumn: 0
+              endLine: 3
+              endColumn: 1
+              startByte: 0
+              endByte: 72
+            parents: []
+            signature: 'function add(a: number, b: number): number'
+            documentation: 'Adds two numbers'
+            hash: '3a4f5c9d2b8e7a1f'
+            metadata:
+              exported: true
+              async: false
+        imports: []
+        exports:
+          - kind: 'declaration'
+            specifiers:
+              - local: 'add'
+                exported: 'add'
+                typeOnly: false
+            span:
+              startLine: 1
+              startColumn: 0
+              endLine: 1
+              endColumn: 6
+              startByte: 0
+              endByte: 6
+        calls: []
+        comments:
+          - text: 'Adds two numbers'
+            kind: 'jsdoc'
+            span:
+              startLine: 0
+              startColumn: 0
+              endLine: 0
+              endColumn: 20
+              startByte: 0
+              endByte: 20
+            associatedSymbol: 'add'
+        errors: []
+        metadata:
+          parsedAt: '2025-10-12T10:30:00Z'
+          duration: 5.2
+          lineCount: 3
+          fileSize: 72
+          incremental: false
+          parserVersion: '1.0.0'
+
+    ParseResultWithErrors:
+      summary: Parse result with syntax errors
+      value:
+        path: '/project/src/broken.ts'
+        language: 'typescript'
+        symbols:
+          - name: 'validFunction'
+            kind: 'function'
+            span:
+              startLine: 1
+              startColumn: 0
+              endLine: 3
+              endColumn: 1
+              startByte: 0
+              endByte: 50
+            parents: []
+            signature: 'function validFunction(): void'
+            documentation: null
+            hash: '1a2b3c4d5e6f7a8b'
+            metadata:
+              exported: false
+        imports: []
+        exports: []
+        calls: []
+        comments: []
+        errors:
+          - message: 'Unexpected token'
+            span:
+              startLine: 5
+              startColumn: 10
+              endLine: 5
+              endColumn: 11
+              startByte: 75
+              endByte: 76
+            severity: 'error'
+            recovery:
+              recovered: true
+              strategy: 'skip_statement'
+              symbolsAfterError: 2
+        metadata:
+          parsedAt: '2025-10-12T10:31:00Z'
+          duration: 6.5
+          lineCount: 10
+          fileSize: 150
+          incremental: false
+          parserVersion: '1.0.0'
