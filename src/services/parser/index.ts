@@ -8,6 +8,7 @@
 import { promises as fs } from 'fs';
 import { detectLanguage, loadGrammar } from './LanguageLoader.js';
 import { TreeSitterParser } from './TreeSitterParser.js';
+import { extractSymbols } from './SymbolExtractor.js';
 import type { ParseResult } from '../../models/ParseResult.js';
 
 /**
@@ -62,21 +63,23 @@ export async function parse(
     // 6. Extract syntax errors (with recovery info)
     const errors = parser.extractErrors(tree, source);
 
-    // 7. Count lines and file size
+    // 7. Extract symbols (T019)
+    const symbols = extractSymbols(tree, source);
+
+    // 8. Count lines and file size
     const lines = source.split('\n');
     const lineCount = lines.length;
     const fileSize = Buffer.byteLength(source, 'utf-8');
 
-    // 8. Calculate parse duration
+    // 9. Calculate parse duration
     const duration = Date.now() - startTime;
 
-    // 9. Create ParseResult with metadata
-    // Note: symbols, imports, exports, calls, comments will be empty arrays for now
-    // They will be populated in subsequent phases (US1-US4)
+    // 10. Create ParseResult with metadata
+    // Note: imports, exports, calls, comments will be populated in subsequent phases (US2-US4)
     const result: ParseResult = {
       path: filePath,
       language,
-      symbols: [],
+      symbols,
       imports: [],
       exports: [],
       calls: [],
