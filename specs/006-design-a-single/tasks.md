@@ -26,13 +26,13 @@ description: "Task list for database schema implementation"
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create `sql/` directory structure at repository root
-- [ ] T002 [P] Create `sql/migrations/` directory for versioned migration scripts
-- [ ] T003 [P] Create `sql/indexes.sql` file for index definitions (optional separate file)
-- [ ] T004 [P] Create `src/models/database-schema.ts` for TypeScript schema type definitions
-- [ ] T005 [P] Create `src/services/schema-manager.ts` skeleton for schema management
-- [ ] T006 [P] Create `src/services/migration-runner.ts` skeleton for migration execution
-- [ ] T007 [P] Create `src/lib/schema-validator.ts` for integrity checks
+- [X] T001 Create `sql/` directory structure at repository root
+- [X] T002 [P] Create `sql/migrations/` directory for versioned migration scripts
+- [X] T003 [P] Create `sql/indexes.sql` file for index definitions (optional separate file)
+- [X] T004 [P] Create `src/models/database-schema.ts` for TypeScript schema type definitions
+- [X] T005 [P] Create `src/services/schema-manager.ts` skeleton for schema management
+- [X] T006 [P] Create `src/services/migration-runner.ts` skeleton for migration execution
+- [X] T007 [P] Create `src/lib/schema-validator.ts` for integrity checks
 
 ---
 
@@ -42,13 +42,13 @@ description: "Task list for database schema implementation"
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T008 Define SQLite PRAGMA configuration interface in `src/models/database-schema.ts`
-- [ ] T009 Implement database connection initialization with PRAGMA settings in `src/services/schema-manager.ts`
-- [ ] T010 Implement migration runner framework in `src/services/migration-runner.ts` (load migrations, track versions, apply sequentially)
-- [ ] T011 [P] Create `sql/migrations/001_initial_schema.sql` with files table DDL and indexes
-- [ ] T012 Implement schema version tracking using meta table
-- [ ] T013 Add integrity check function (`PRAGMA integrity_check`) in `src/lib/schema-validator.ts`
-- [ ] T014 Add foreign key validation function (`PRAGMA foreign_key_check`) in `src/lib/schema-validator.ts`
+- [X] T008 Define SQLite PRAGMA configuration interface in `src/models/database-schema.ts`
+- [X] T009 Implement database connection initialization with PRAGMA settings in `src/services/schema-manager.ts`
+- [X] T010 Implement migration runner framework in `src/services/migration-runner.ts` (load migrations, track versions, apply sequentially)
+- [X] T011 [P] Create `sql/migrations/001_initial_schema.sql` with files table DDL and indexes
+- [X] T012 Implement schema version tracking using meta table
+- [X] T013 Add integrity check function (`PRAGMA integrity_check`) in `src/lib/schema-validator.ts`
+- [X] T014 Add foreign key validation function (`PRAGMA foreign_key_check`) in `src/lib/schema-validator.ts`
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
