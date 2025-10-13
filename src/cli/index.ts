@@ -40,6 +40,7 @@ import { createDoctorCommand } from './commands/doctor.js';
 import { createUninstallCommand } from './commands/uninstall.js';
 import { createWatchCommand } from './commands/watch.js';
 import { createHooksCommand } from './commands/hooks.js';
+import { createDiagnoseCommand } from './commands/diagnose.js';
 
 // Register commands
 program.addCommand(createInitCommand());
@@ -50,6 +51,7 @@ program.addCommand(createDoctorCommand());
 program.addCommand(createUninstallCommand());
 program.addCommand(createWatchCommand());
 program.addCommand(createHooksCommand());
+program.addCommand(createDiagnoseCommand());
 
 // Parse arguments
 try {

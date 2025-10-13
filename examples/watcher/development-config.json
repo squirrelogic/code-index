@@ -1,0 +1,38 @@
+{
+  "$schema": "../../schemas/watcher-config.schema.json",
+  "description": "Fast feedback configuration for active development",
+  "debounceDelay": 300,
+  "batchSize": 100,
+  "maxQueueSize": 5000,
+  "extensions": ["js", "ts", "jsx", "tsx"],
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/.codeindex/**",
+    "**/*.log",
+    "**/coverage/**",
+    "**/*.test.js",
+    "**/*.test.ts",
+    "**/*.spec.js",
+    "**/*.spec.ts"
+  ],
+  "watchOptions": {
+    "followSymlinks": true,
+    "usePolling": false,
+    "awaitWriteFinish": {
+      "stabilityThreshold": 100,
+      "pollInterval": 50
+    }
+  },
+  "performance": {
+    "memoryThresholdMb": 500,
+    "backpressureEnabled": true
+  },
+  "notes": [
+    "Lower debounce delay for faster feedback during development",
+    "Extensions limited to JavaScript/TypeScript for faster processing",
+    "Test files excluded to reduce noise"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "../../schemas/watcher-config.schema.json",
+  "description": "Optimized configuration for large projects (100k+ files)",
+  "debounceDelay": 1000,
+  "batchSize": 200,
+  "maxQueueSize": 5000,
+  "maxDepth": 5,
+  "extensions": ["js", "ts", "jsx", "tsx", "py", "go", "java", "rb", "rs"],
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/.codeindex/**",
+    "**/*.log",
+    "**/tmp/**",
+    "**/.next/**",
+    "**/.cache/**",
+    "**/coverage/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/vendor/**",
+    "**/*.min.js",
+    "**/*.min.css",
+    "**/bundle.js",
+    "**/webpack-assets.json"
+  ],
+  "watchOptions": {
+    "followSymlinks": false,
+    "usePolling": false,
+    "awaitWriteFinish": {
+      "stabilityThreshold": 500,
+      "pollInterval": 200
+    }
+  },
+  "performance": {
+    "memoryThresholdMb": 400,
+    "backpressureEnabled": true
+  }
+}

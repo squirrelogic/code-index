@@ -509,43 +509,43 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [Polish] Cross-cutting Concerns
 
-**T062** [P] Add performance benchmarking
+**T062** [X] [P] [X] Add performance benchmarking [X]
 - File: `src/cli/utils/Benchmarker.ts`
 - Measure: Indexing speed
 - Track: Memory usage
 - Report: Performance metrics
 
-**T063** [P] Implement health checks
+**T063** [X] [P] [X] Implement health checks [X]
 - File: `src/services/HealthChecker.ts`
 - Check: Watcher status
 - Verify: Database connectivity
 - Test: File system access
 
-**T064** Add telemetry collection
+**T064** [X] Add telemetry collection [X]
 - File: `src/services/Telemetry.ts`
 - Track: Feature usage
 - Collect: Performance data
 - Respect: Privacy settings
 
-**T065** [P] Create troubleshooting utilities
+**T065** [X] [P] [X] Create troubleshooting utilities [X]
 - File: `src/cli/commands/diagnose.ts`
 - Check: Common issues
 - Suggest: Fixes
 - Generate: Debug reports
 
-**T066** Update documentation
+**T066** [X] Update documentation [X]
 - Files: README.md, docs/
 - Document: New commands
 - Add: Configuration examples
 - Include: Troubleshooting guide
 
-**T067** [P] Add example configurations
+**T067** [X] [P] [X] Add example configurations [X]
 - Directory: `examples/watcher/`
 - Create: Sample configs
 - Include: Common patterns
 - Add: Performance tuning examples
 
-**T068** Final integration testing
+**T068** [X] Final integration testing [X]
 - File: `tests/e2e/full-workflow.test.ts`
 - Test: Complete workflow
 - Verify: All features work together
