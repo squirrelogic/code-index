@@ -9,10 +9,11 @@ import { ChunkRepository } from '../../../src/services/database/ChunkRepository.
 import { CodeChunker } from '../../../src/services/chunker/CodeChunker.js';
 import { ChunkQuery } from '../../../src/models/ChunkQuery.js';
 import { ChunkType, Language } from '../../../src/models/ChunkTypes.js';
-import { TreeSitterParser } from '../../../src/services/parser/TreeSitterParser.js';
 import { Chunk } from '../../../src/models/Chunk.js';
 import { randomUUID } from 'crypto';
 import { createTestDatabase } from '../../helpers/database-test-helper.js';
+import { createTestChunker, getLanguageParser } from '../../helpers/chunker-test-helper.js';
+import Parser from 'tree-sitter';
 
 // Test fixtures with diverse chunk types
 const typeScriptFixture = `
@@ -121,15 +122,13 @@ class PythonClass:
 describe('Chunk Querying Integration Tests (US4)', () => {
   let db: Database.Database;
   let repository: ChunkRepository;
-  let parser: TreeSitterParser;
   let chunker: CodeChunker;
 
   beforeAll(async () => {
     // Create test database with production schema
     db = createTestDatabase();
     repository = new ChunkRepository(db);
-    parser = new TreeSitterParser();
-    chunker = new CodeChunker(parser);
+    chunker = await createTestChunker('/test');
 
     // Chunk all fixtures and save to database
     const fixtures = [
@@ -140,7 +139,22 @@ describe('Chunk Querying Integration Tests (US4)', () => {
 
     for (const fixture of fixtures) {
       const fileId = randomUUID();
-      const chunks = await chunker.chunkFile(fixture.path, fixture.content, fixture.language, fileId);
+
+      // Get parser for this language
+      const parser = await getLanguageParser(
+        fixture.language === Language.TypeScript ? 'typescript' :
+        fixture.language === Language.JavaScript ? 'javascript' :
+        'python'
+      );
+
+      // Calculate appropriate buffer size
+      const bufferSize = fixture.content.length < 32768 ? 65536 : fixture.content.length * 2;
+
+      // Parse the content
+      const tree = parser.parse(fixture.content, undefined, { bufferSize });
+
+      // Chunk the file
+      const chunks = chunker.chunkFile(fixture.path, fileId, tree, fixture.language);
 
       // Save all chunks
       for (const chunk of chunks) {

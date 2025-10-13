@@ -331,10 +331,12 @@ export class ChunkRepository {
       // Use FTS5 rank for text search (lower rank = better match)
       // Boost by type/language match using CASE expressions
       let orderBy = 'fts_rank';
+      let typeBoosts = '';
+      let langBoosts = '';
 
       // Add type match boost
       if (query.chunkTypes.length > 0) {
-        const typeBoosts = query.chunkTypes
+        typeBoosts = query.chunkTypes
           .map((_, i) => `chunk_type = @type${i}`)
           .join(' OR ');
         orderBy = `(CASE WHEN ${typeBoosts} THEN fts_rank - 0.5 ELSE fts_rank END)`;
@@ -342,7 +344,7 @@ export class ChunkRepository {
 
       // Add language match boost
       if (query.languages.length > 0) {
-        const langBoosts = query.languages
+        langBoosts = query.languages
           .map((_, i) => `language = @lang${i}`)
           .join(' OR ');
         if (query.chunkTypes.length > 0) {
