@@ -249,10 +249,13 @@ export class ChunkRepository {
     const whereClauses: string[] = [];
     const params: Record<string, unknown> = {};
 
+    // Table prefix for columns - will be 'c.' for FTS queries, '' for regular queries
+    const tablePrefix = query.searchText ? 'c.' : '';
+
     // Filter by chunk types
     if (query.chunkTypes.length > 0) {
       const placeholders = query.chunkTypes.map((_, i) => `@type${i}`).join(', ');
-      whereClauses.push(`chunk_type IN (${placeholders})`);
+      whereClauses.push(`${tablePrefix}chunk_type IN (${placeholders})`);
       query.chunkTypes.forEach((type, i) => {
         params[`type${i}`] = type;
       });
@@ -261,7 +264,7 @@ export class ChunkRepository {
     // Filter by languages
     if (query.languages.length > 0) {
       const placeholders = query.languages.map((_, i) => `@lang${i}`).join(', ');
-      whereClauses.push(`language IN (${placeholders})`);
+      whereClauses.push(`${tablePrefix}language IN (${placeholders})`);
       query.languages.forEach((lang, i) => {
         params[`lang${i}`] = lang;
       });
@@ -269,17 +272,17 @@ export class ChunkRepository {
 
     // Filter by file ID
     if (query.fileId) {
-      whereClauses.push('file_id = @fileId');
+      whereClauses.push(`${tablePrefix}file_id = @fileId`);
       params.fileId = query.fileId;
     }
 
     // Filter by line count range
     if (query.minLineCount !== null) {
-      whereClauses.push('line_count >= @minLines');
+      whereClauses.push(`${tablePrefix}line_count >= @minLines`);
       params.minLines = query.minLineCount;
     }
     if (query.maxLineCount !== null) {
-      whereClauses.push('line_count <= @maxLines');
+      whereClauses.push(`${tablePrefix}line_count <= @maxLines`);
       params.maxLines = query.maxLineCount;
     }
 
@@ -289,15 +292,19 @@ export class ChunkRepository {
 
     // Full-text search with relevance scoring
     if (query.searchText) {
+      // Query FTS table first, then join to chunks for full data
+      // Note: FTS5 MATCH must use the actual table name, not an alias
       sql = `
-        SELECT c.*, fts.rank as fts_rank FROM chunks c
-        INNER JOIN chunks_fts fts ON c.id = fts.chunk_id
-        WHERE fts MATCH @searchText
+        SELECT c.*, chunks_fts.rank as fts_rank
+        FROM chunks_fts
+        INNER JOIN chunks c ON c.id = chunks_fts.chunk_id
+        WHERE chunks_fts MATCH @searchText
       `;
       countSql = `
-        SELECT COUNT(*) as count FROM chunks c
-        INNER JOIN chunks_fts fts ON c.id = fts.chunk_id
-        WHERE fts MATCH @searchText
+        SELECT COUNT(*) as count
+        FROM chunks_fts
+        INNER JOIN chunks c ON c.id = chunks_fts.chunk_id
+        WHERE chunks_fts MATCH @searchText
       `;
       params.searchText = query.searchText;
     }

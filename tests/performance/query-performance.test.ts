@@ -14,48 +14,7 @@ import { ChunkQuery } from '../../src/models/ChunkQuery.js';
 import { ChunkType, Language } from '../../src/models/ChunkTypes.js';
 import { Chunk } from '../../src/models/Chunk.js';
 import { randomUUID } from 'crypto';
-
-// Helper to create test chunk with minimal data
-function createTestChunk(overrides?: Partial<{
-  chunkType: ChunkType;
-  language: Language;
-  name: string;
-  fileId: string;
-  chunkHash: string;
-}>): Chunk {
-  const content = 'function test() { return 42; }';
-  const lineCount = 3;
-
-  return new Chunk(
-    randomUUID(),
-    overrides?.chunkHash || randomUUID().replace(/-/g, '').padEnd(64, '0'),
-    overrides?.fileId || randomUUID(),
-    overrides?.chunkType || ChunkType.Function,
-    overrides?.name || `func_${Date.now()}_${Math.random()}`,
-    content,
-    content.replace(/\s+/g, ' ').trim(),
-    1,
-    lineCount,
-    0,
-    content.length,
-    overrides?.language || Language.TypeScript,
-    {
-      className: null,
-      classInheritance: [],
-      modulePath: '/test/file.ts',
-      namespace: null,
-      methodSignature: null,
-      isTopLevel: true,
-      parentChunkHash: null,
-    },
-    null,
-    'function test(): number',
-    lineCount,
-    content.length,
-    new Date(),
-    new Date()
-  );
-}
+import { createTestDatabase, createTestChunk } from '../helpers/database-test-helper.js';
 
 describe('Query Performance Tests (US4, T047)', () => {
   let db: Database.Database;
@@ -71,54 +30,8 @@ describe('Query Performance Tests (US4, T047)', () => {
     console.log(`\n🚀 Creating test database with ${DATASET_SIZE.toLocaleString()} chunks...`);
     const startTime = Date.now();
 
-    db = new Database(':memory:');
-
-    // Create schema
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS chunks (
-        id TEXT PRIMARY KEY,
-        chunk_hash TEXT NOT NULL UNIQUE,
-        file_id TEXT NOT NULL,
-        chunk_type TEXT NOT NULL,
-        name TEXT NOT NULL,
-        content TEXT NOT NULL,
-        normalized_content TEXT NOT NULL,
-        start_line INTEGER NOT NULL,
-        end_line INTEGER NOT NULL,
-        start_byte INTEGER NOT NULL,
-        end_byte INTEGER NOT NULL,
-        language TEXT NOT NULL,
-        context TEXT NOT NULL,
-        documentation TEXT,
-        signature TEXT,
-        line_count INTEGER NOT NULL,
-        character_count INTEGER NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE INDEX idx_chunks_hash ON chunks(chunk_hash);
-      CREATE INDEX idx_chunks_file ON chunks(file_id);
-      CREATE INDEX idx_chunks_type ON chunks(chunk_type);
-      CREATE INDEX idx_chunks_language ON chunks(language);
-      CREATE INDEX idx_chunks_name ON chunks(name);
-
-      CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-        chunk_id UNINDEXED,
-        name,
-        content,
-        documentation,
-        signature,
-        content=chunks,
-        content_rowid=rowid
-      );
-
-      CREATE TRIGGER chunks_fts_insert AFTER INSERT ON chunks BEGIN
-        INSERT INTO chunks_fts(rowid, chunk_id, name, content, documentation, signature)
-        VALUES (new.rowid, new.id, new.name, new.content, new.documentation, new.signature);
-      END;
-    `);
-
+    // Create test database with production schema (includes all FTS triggers)
+    db = createTestDatabase();
     repository = new ChunkRepository(db);
 
     // Populate database with diverse chunks
