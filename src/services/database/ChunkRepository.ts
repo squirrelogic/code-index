@@ -287,10 +287,10 @@ export class ChunkRepository {
     let sql = 'SELECT * FROM chunks';
     let countSql = 'SELECT COUNT(*) as count FROM chunks';
 
-    // Full-text search
+    // Full-text search with relevance scoring
     if (query.searchText) {
       sql = `
-        SELECT c.* FROM chunks c
+        SELECT c.*, fts.rank as fts_rank FROM chunks c
         INNER JOIN chunks_fts fts ON c.id = fts.chunk_id
         WHERE fts MATCH @searchText
       `;
@@ -319,8 +319,43 @@ export class ChunkRepository {
     const countRow = countStmt.get(params) as { count: number };
     const total = countRow.count;
 
-    // Add ordering and pagination
-    sql += ' ORDER BY start_line ASC';
+    // Add relevance-based ordering
+    if (query.searchText) {
+      // Use FTS5 rank for text search (lower rank = better match)
+      // Boost by type/language match using CASE expressions
+      let orderBy = 'fts_rank';
+
+      // Add type match boost
+      if (query.chunkTypes.length > 0) {
+        const typeBoosts = query.chunkTypes
+          .map((_, i) => `chunk_type = @type${i}`)
+          .join(' OR ');
+        orderBy = `(CASE WHEN ${typeBoosts} THEN fts_rank - 0.5 ELSE fts_rank END)`;
+      }
+
+      // Add language match boost
+      if (query.languages.length > 0) {
+        const langBoosts = query.languages
+          .map((_, i) => `language = @lang${i}`)
+          .join(' OR ');
+        if (query.chunkTypes.length > 0) {
+          // Combine with existing boost
+          orderBy = `(CASE
+            WHEN (${typeBoosts}) AND (${langBoosts}) THEN fts_rank - 1.0
+            WHEN (${typeBoosts}) THEN fts_rank - 0.5
+            WHEN (${langBoosts}) THEN fts_rank - 0.3
+            ELSE fts_rank END)`;
+        } else {
+          orderBy = `(CASE WHEN ${langBoosts} THEN fts_rank - 0.3 ELSE fts_rank END)`;
+        }
+      }
+
+      sql += ` ORDER BY ${orderBy} ASC`;
+    } else {
+      // No text search - order by start_line for consistent ordering
+      sql += ' ORDER BY start_line ASC';
+    }
+
     sql += ' LIMIT @limit OFFSET @offset';
     params.limit = query.limit;
     params.offset = query.offset;
