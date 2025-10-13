@@ -81,3 +81,72 @@ export interface File {
 	/** Soft delete timestamp (NULL = active, Unix epoch = deleted) */
 	deleted_at: number | null;
 }
+
+/**
+ * Symbol types supported by the indexer
+ */
+export type SymbolType =
+	| 'function'
+	| 'class'
+	| 'variable'
+	| 'constant'
+	| 'type'
+	| 'interface'
+	| 'method';
+
+/**
+ * Symbol entity representing a code symbol
+ */
+export interface Symbol {
+	/** Unique identifier (UUID v4 or ULID) */
+	id: string;
+	/** Parent file identifier */
+	file_id: string;
+	/** Symbol name (e.g., 'calculateTotal') */
+	symbol_name: string;
+	/** Symbol type (function, class, etc.) */
+	symbol_type: SymbolType;
+	/** Full signature (optional) */
+	signature: string | null;
+	/** Extracted documentation/comments (optional) */
+	documentation: string | null;
+	/** Starting line number (1-indexed) */
+	line_start: number;
+	/** Ending line number (1-indexed, inclusive) */
+	line_end: number;
+	/** Creation timestamp (Unix epoch seconds) */
+	created_at: number;
+	/** Soft delete timestamp (NULL = active, Unix epoch = deleted) */
+	deleted_at: number | null;
+}
+
+/**
+ * Reference types for cross-references
+ */
+export type ReferenceType =
+	| 'read'
+	| 'write'
+	| 'call'
+	| 'inherit'
+	| 'implement'
+	| 'import';
+
+/**
+ * CrossReference entity representing symbol usage relationships
+ */
+export interface CrossReference {
+	/** Unique identifier (UUID v4 or ULID) */
+	id: string;
+	/** Symbol making the reference */
+	source_symbol_id: string;
+	/** Symbol being referenced */
+	target_symbol_id: string;
+	/** Type of reference */
+	reference_type: ReferenceType;
+	/** Surrounding code context (optional) */
+	context: string | null;
+	/** Line number where reference occurs (optional) */
+	line_number: number | null;
+	/** Creation timestamp (Unix epoch seconds) */
+	created_at: number;
+}

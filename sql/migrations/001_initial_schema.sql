@@ -55,3 +55,59 @@ CREATE TABLE migration_history (
 
 -- Index for version lookups
 CREATE UNIQUE INDEX idx_migration_version ON migration_history(version);
+
+-- ============================================================================
+-- Symbols Table: Code symbols with soft delete
+-- ============================================================================
+CREATE TABLE symbols (
+    id TEXT PRIMARY KEY NOT NULL,
+    file_id TEXT NOT NULL,
+    symbol_name TEXT NOT NULL,
+    symbol_type TEXT NOT NULL CHECK (
+        symbol_type IN ('function', 'class', 'variable', 'constant', 'type', 'interface', 'method')
+    ),
+    signature TEXT,
+    documentation TEXT,
+    line_start INTEGER NOT NULL CHECK (line_start >= 1),
+    line_end INTEGER NOT NULL CHECK (line_end >= line_start),
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    deleted_at INTEGER,
+    CHECK (deleted_at IS NULL OR deleted_at >= created_at),
+    FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+);
+
+-- Partial index for active symbols by name
+CREATE INDEX idx_symbols_name ON symbols(symbol_name) WHERE deleted_at IS NULL;
+
+-- Compound index for file + type lookups (leftmost prefix matching)
+CREATE INDEX idx_symbols_file_type ON symbols(file_id, symbol_type) WHERE deleted_at IS NULL;
+
+-- Index for soft-delete cleanup queries
+CREATE INDEX idx_symbols_deleted ON symbols(deleted_at) WHERE deleted_at IS NOT NULL;
+
+-- ============================================================================
+-- Cross-Reference Table: Symbol usage relationships
+-- ============================================================================
+CREATE TABLE xrefs (
+    id TEXT PRIMARY KEY NOT NULL,
+    source_symbol_id TEXT NOT NULL,
+    target_symbol_id TEXT NOT NULL,
+    reference_type TEXT NOT NULL CHECK (
+        reference_type IN ('read', 'write', 'call', 'inherit', 'implement', 'import')
+    ),
+    context TEXT,
+    line_number INTEGER CHECK (line_number IS NULL OR line_number >= 1),
+    created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+    CHECK (source_symbol_id != target_symbol_id),
+    FOREIGN KEY (source_symbol_id) REFERENCES symbols(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_symbol_id) REFERENCES symbols(id) ON DELETE CASCADE
+);
+
+-- Index for "find all references to X"
+CREATE INDEX idx_xrefs_target ON xrefs(target_symbol_id);
+
+-- Index for "find all references from X"
+CREATE INDEX idx_xrefs_source ON xrefs(source_symbol_id);
+
+-- Compound index for reference type filtering
+CREATE INDEX idx_xrefs_type ON xrefs(reference_type, target_symbol_id);

@@ -90,33 +90,33 @@ description: "Task list for database schema implementation"
 
 ### Implementation for User Story 2
 
-- [ ] T022 [P] [US2] Add symbols table to `sql/migrations/001_initial_schema.sql` with fields: id, file_id, symbol_name, symbol_type, signature, documentation, line_start, line_end, created_at, deleted_at
-- [ ] T023 [P] [US2] Add symbols table indexes in `sql/migrations/001_initial_schema.sql`:
+- [X] T022 [P] [US2] Add symbols table to `sql/migrations/001_initial_schema.sql` with fields: id, file_id, symbol_name, symbol_type, signature, documentation, line_start, line_end, created_at, deleted_at
+- [X] T023 [P] [US2] Add symbols table indexes in `sql/migrations/001_initial_schema.sql`:
   - `idx_symbols_name` (partial WHERE deleted_at IS NULL)
   - `idx_symbols_file_type` (compound on file_id, symbol_type with partial filter)
   - `idx_symbols_deleted` (WHERE deleted_at IS NOT NULL for cleanup queries)
-- [ ] T024 [P] [US2] Add xrefs (cross-references) table to `sql/migrations/001_initial_schema.sql` with fields: id, source_symbol_id, target_symbol_id, reference_type, context, line_number, created_at
-- [ ] T025 [P] [US2] Add xrefs table indexes:
+- [X] T024 [P] [US2] Add xrefs (cross-references) table to `sql/migrations/001_initial_schema.sql` with fields: id, source_symbol_id, target_symbol_id, reference_type, context, line_number, created_at
+- [X] T025 [P] [US2] Add xrefs table indexes:
   - `idx_xrefs_source` (on source_symbol_id)
   - `idx_xrefs_target` (on target_symbol_id for "find all references")
   - `idx_xrefs_type` (on reference_type, target_symbol_id compound)
-- [ ] T026 [US2] Define `Symbol` entity interface in `src/models/database-schema.ts`
-- [ ] T027 [US2] Define `CrossReference` entity interface in `src/models/database-schema.ts`
-- [ ] T028 [US2] Implement `SymbolRepository` class in `src/services/symbol-repository.ts` with methods:
+- [X] T026 [US2] Define `Symbol` entity interface in `src/models/database-schema.ts`
+- [X] T027 [US2] Define `CrossReference` entity interface in `src/models/database-schema.ts`
+- [X] T028 [US2] Implement `SymbolRepository` class in `src/services/symbol-repository.ts` with methods:
   - `insert(symbol: Symbol): string` - Insert new symbol
   - `findByName(name: string): Symbol[]` - Find symbols by name (<50ms target)
   - `findByFile(fileId: string): Symbol[]` - Find all symbols in file (<50ms target)
   - `findByFileAndType(fileId: string, type: string): Symbol[]` - Find symbols by file and type
   - `softDelete(symbolId: string): void` - Mark symbol as deleted with timestamp
   - `cleanupExpired(retentionDays: number): number` - Delete symbols older than retention period
-- [ ] T029 [US2] Implement `CrossReferenceRepository` class in `src/services/xref-repository.ts` with methods:
+- [X] T029 [US2] Implement `CrossReferenceRepository` class in `src/services/xref-repository.ts` with methods:
   - `insert(xref: CrossReference): string` - Create cross-reference
   - `findReferencesTo(symbolId: string): CrossReference[]` - Find all references TO a symbol (<100ms target)
   - `findReferencesFrom(symbolId: string): CrossReference[]` - Find all references FROM a symbol (<100ms target)
   - `findByType(refType: string): CrossReference[]` - Filter by reference type
-- [ ] T030 [US2] Add query performance monitoring for symbol lookups (log queries >50ms)
-- [ ] T031 [US2] Implement periodic cleanup function for deleted symbols in `src/services/symbol-repository.ts` (30-day retention per FR-002b)
-- [ ] T032 [US2] Add validation for symbol rename flow: create new symbol with new ID, soft-delete old symbol
+- [X] T030 [US2] Add query performance monitoring for symbol lookups (log queries >50ms)
+- [X] T031 [US2] Implement periodic cleanup function for deleted symbols in `src/services/symbol-repository.ts` (30-day retention per FR-002b)
+- [X] T032 [US2] Add validation for symbol rename flow: create new symbol with new ID, soft-delete old symbol
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
