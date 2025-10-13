@@ -204,38 +204,38 @@ description: "Task list for database schema implementation"
 
 ### Implementation for User Story 5
 
-- [ ] T054 [US5] Add meta table to `sql/migrations/001_initial_schema.sql` with fields: key (PRIMARY KEY), value, updated_at
-- [ ] T055 [US5] Add migration_history table to `sql/migrations/001_initial_schema.sql` with fields: id (AUTOINCREMENT), version (UNIQUE), description, applied_at
-- [ ] T056 [US5] Add migration_history index: `idx_migration_version` (UNIQUE on version)
-- [ ] T057 [US5] Insert initial meta records in migration 001:
+- [X] T054 [US5] Add meta table to `sql/migrations/001_initial_schema.sql` with fields: key (PRIMARY KEY), value, updated_at
+- [X] T055 [US5] Add migration_history table to `sql/migrations/001_initial_schema.sql` with fields: id (AUTOINCREMENT), version (UNIQUE), description, applied_at
+- [X] T056 [US5] Add migration_history index: `idx_migration_version` (UNIQUE on version)
+- [X] T057 [US5] Insert initial meta records in migration 001:
   - `schema_version = '1'`
   - `created_at = unixepoch()`
   - `retention_days = '30'`
-- [ ] T058 [US5] Implement migration detection in `src/services/migration-runner.ts`:
+- [X] T058 [US5] Implement migration detection in `src/services/migration-runner.ts`:
   - `getCurrentVersion(): string` - Read schema_version from meta table
   - `getPendingMigrations(currentVersion: string): Migration[]` - Filter pending migrations
-- [ ] T059 [US5] Enhance migration runner with transaction wrapping:
+- [X] T059 [US5] Enhance migration runner with transaction wrapping:
   - BEGIN TRANSACTION → Execute migration → Update meta → Record history → COMMIT
   - ROLLBACK on failure with error logging
-- [ ] T060 [US5] Add migration validation before execution:
+- [X] T060 [US5] Add migration validation before execution:
   - Check migration file format (version_description.sql)
   - Verify sequential version numbers
   - Detect duplicate or out-of-order migrations
-- [ ] T061 [US5] Implement post-migration operations in `src/services/migration-runner.ts`:
+- [X] T061 [US5] Implement post-migration operations in `src/services/migration-runner.ts`:
   - Run `ANALYZE` to update query optimizer statistics
   - Run `PRAGMA integrity_check` to verify success
-- [ ] T062 [US5] Add structured error logging for database operations in `src/lib/logger.ts`:
+- [X] T062 [US5] Add structured error logging for database operations in `src/lib/logger.ts`:
   - Log format: JSON lines (.jsonl)
   - Fields: timestamp, level (error/fatal), operation, query, parameters, error_code, error_message, stack_trace, context
   - Output to `.codeindex/logs/db-errors.jsonl`
-- [ ] T063 [US5] Add slow query logging in `src/lib/logger.ts`:
+- [X] T063 [US5] Add slow query logging in `src/lib/logger.ts`:
   - Log queries exceeding thresholds: >50ms (symbols), >100ms (search), >1000ms (writes)
   - Fields: timestamp, level (warn), operation, query, parameters, duration_ms, result_count, threshold_ms
   - Output to `.codeindex/logs/slow-queries.jsonl`
-- [ ] T064 [US5] Implement backup strategy helper in `src/lib/backup-utils.ts`:
+- [X] T064 [US5] Implement backup strategy helper in `src/lib/backup-utils.ts`:
   - `createBackup(dbPath: string): string` - Use `VACUUM INTO 'backup-{timestamp}.db'`
   - `cleanupOldBackups(backupDir: string, keepLast: number): void` - Keep only last N backups
-- [ ] T065 [US5] Add rollback documentation in migration README explaining restore procedure
+- [X] T065 [US5] Add rollback documentation in migration README explaining restore procedure
 
 **Checkpoint**: User Stories 1-5 should all work independently with full migration support
 
