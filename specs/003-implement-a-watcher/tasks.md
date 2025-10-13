@@ -112,13 +112,13 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] Core Models
 
-**T013** [P] Implement FileChangeEvent model
+**T013** [P] Implement FileChangeEvent model [X]
 - File: `src/models/FileChangeEvent.ts`
 - Define: Interface and enums (FileChangeType, ProcessingStatus)
 - Include: Validation methods
 - Export: Types and factory functions
 
-**T014** [P] Implement DebounceBuffer model
+**T014** [P] Implement DebounceBuffer model [X]
 - File: `src/models/DebounceBuffer.ts`
 - Define: Buffer structure with Map<string, FileChangeEvent>
 - Include: Event coalescing logic
@@ -126,32 +126,32 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] Core Services
 
-**T015** Implement DebounceManager service
+**T015** Implement DebounceManager service [X]
 - File: `src/services/watcher/DebounceManager.ts`
 - Implement: Event accumulation and coalescing
 - Handle: Timer management for delayed processing
 - Process: Events in dependency order
 
-**T016** [P] Implement IgnorePatterns service
+**T016** [P] Implement IgnorePatterns service [X]
 - File: `src/services/watcher/IgnorePatterns.ts`
 - Load: Default patterns (node_modules, dist, build, .git, .codeindex)
 - Support: Glob pattern matching
 - Cache: Pattern evaluation results
 
-**T017** Implement FileWatcher service
+**T017** Implement FileWatcher service [X]
 - File: `src/services/watcher/FileWatcher.ts`
 - Use: chokidar with configuration
 - Emit: FileChangeEvents to DebounceManager
 - Handle: Symlinks with canonical path resolution
 - Requires: T013, T014, T015, T016
 
-**T018** Implement batch processor for changes
+**T018** Implement batch processor for changes [X]
 - File: `src/services/watcher/BatchProcessor.ts`
 - Process: Batches of 100 files maximum
 - Prioritize: User files over dependencies
 - Use: IncrementalIndexer for database updates
 
-**T019** [P] Add dependency order resolution
+**T019** [P] Add dependency order resolution [X]
 - File: `src/services/watcher/DependencyResolver.ts`
 - Parse: Import/require statements with regex
 - Build: Dependency graph
@@ -159,13 +159,13 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] CLI Command
 
-**T020** Implement watch command
+**T020** Implement watch command [X]
 - File: `src/cli/commands/watch.ts`
 - Parse: Command-line arguments (--delay, --batch-size, --ignore, etc.)
 - Initialize: FileWatcher with configuration
 - Display: Real-time status updates
 
-**T021** Add graceful shutdown handling
+**T021** Add graceful shutdown handling [X]
 - File: `src/cli/commands/watch.ts`
 - Handle: Ctrl+C signal
 - Stop: Watcher cleanly
@@ -173,18 +173,18 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [US1] Integration
 
-**T022** Connect watcher to incremental indexer
+**T022** Connect watcher to incremental indexer [X]
 - File: `src/services/watcher/FileWatcher.ts`
 - Wire: BatchProcessor to IncrementalIndexer
 - Handle: All event types (create, modify, delete, rename)
 
-**T023** Add memory monitoring to watcher
+**T023** Add memory monitoring to watcher [X]
 - File: `src/services/watcher/FileWatcher.ts`
 - Monitor: Memory usage every 30 seconds
 - Warn: At 400MB threshold
 - Implement: Backpressure when queue > 10,000 events
 
-**T024** [P] Implement watcher status reporting
+**T024** [P] Implement watcher status reporting [X]
 - File: `src/cli/utils/WatcherStatusReporter.ts`
 - Display: Files being processed
 - Show: Batch progress

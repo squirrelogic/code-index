@@ -38,6 +38,7 @@ import { createSearchCommand } from './commands/search.js';
 import { createRefreshCommand } from './commands/refresh.js';
 import { createDoctorCommand } from './commands/doctor.js';
 import { createUninstallCommand } from './commands/uninstall.js';
+import { createWatchCommand } from './commands/watch.js';
 
 // Register commands
 program.addCommand(createInitCommand());
@@ -46,6 +47,7 @@ program.addCommand(createSearchCommand());
 program.addCommand(createRefreshCommand());
 program.addCommand(createDoctorCommand());
 program.addCommand(createUninstallCommand());
+program.addCommand(createWatchCommand());
 
 // Parse arguments
 try {
