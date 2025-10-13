@@ -14,6 +14,11 @@
 - Q: When the watcher encounters temporary file access errors, how should it recover? → A: Retry with exponential backoff (max 3 attempts)
 - Q: When hundreds of files change simultaneously, what's the maximum batch size to process at once? → A: 100 files
 - Q: What file size threshold should trigger binary file detection to skip content indexing? → A: 10MB
+- Q: When the watcher is started in a directory without write permissions, how should it behave? → A: Fail with clear error message
+- Q: When disk space is exhausted during reindexing, what should the system do? → A: Rollback transaction and pause watcher
+- Q: How should the system handle network drives or slow filesystems? → A: Adaptive timeouts with performance mode
+- Q: When Git repository is in detached HEAD state, how should --changed mode behave? → A: Use current HEAD commit normally
+- Q: When existing Git hooks are present, how should system merge its hooks? → A: Append at end with comment markers
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -89,11 +94,11 @@ A developer wants to customize which files and directories are excluded from wat
 
 - What happens when hundreds of files change simultaneously (e.g., dependency updates)? System processes in batches of 100 files maximum
 - How does system handle file permission changes that prevent reading? System retries with exponential backoff up to 3 times
-- What happens when watcher is started in a directory without write permissions?
+- What happens when watcher is started in a directory without write permissions? System fails with clear error message explaining write permissions are required
 - How does system handle symbolic links and their targets changing? System follows symlinks but tracks canonical paths to prevent duplicate indexing when both link and target are watched
-- What happens when disk space is exhausted during reindexing?
-- How does system handle network drives or slow filesystems?
-- What happens when Git repository is in a detached HEAD state?
+- What happens when disk space is exhausted during reindexing? System rolls back current batch transaction and pauses watcher until space available
+- How does system handle network drives or slow filesystems? System uses configurable I/O timeouts (30s default) with automatic performance mode that increases debounce delays and reduces batch sizes
+- What happens when Git repository is in a detached HEAD state? --changed mode uses current HEAD commit as reference point and processes changes normally
 - How does system handle binary files or extremely large files? Files over 10MB trigger binary detection; binary files are skipped from content indexing
 
 ## Requirements *(mandatory)*
@@ -107,8 +112,8 @@ A developer wants to customize which files and directories are excluded from wat
 - **FR-003**: Watcher MUST ignore changes in node_modules, build directories, and .codeindex by default
 - **FR-004**: Watcher MUST support additional ignore patterns through configuration
 - **FR-005**: CLI MUST provide --changed mode that reads diff from last Git commit
-- **FR-006**: --changed mode MUST identify added, modified, and deleted files from commit diff
-- **FR-007**: System MUST provide installable Git hooks for post-merge, post-checkout, and post-rewrite
+- **FR-006**: --changed mode MUST identify added, modified, and deleted files from commit diff (including detached HEAD state)
+- **FR-007**: System MUST provide installable Git hooks for post-merge, post-checkout, and post-rewrite (appending to existing hooks with comment markers)
 - **FR-008**: Git hooks MUST trigger batch refresh of affected files
 - **FR-009**: Git hooks MUST be optional and not required for core functionality
 - **FR-010**: All reindexing operations MUST be incremental (only changed files)
@@ -121,6 +126,8 @@ A developer wants to customize which files and directories are excluded from wat
 - **FR-017**: System MUST respect .gitignore patterns in addition to explicit ignore patterns
 - **FR-018**: Watcher MUST follow symbolic links but track canonical paths to prevent duplicate indexing
 - **FR-019**: System MUST skip content indexing for files larger than 10MB after binary content detection
+- **FR-020**: Watcher MUST detect disk space exhaustion and pause operations with rollback of incomplete transactions
+- **FR-021**: System MUST detect slow filesystem performance and automatically switch to performance mode with longer timeouts (30s default) and adjusted batch parameters
 
 ### Key Entities
 

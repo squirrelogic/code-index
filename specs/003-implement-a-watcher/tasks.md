@@ -23,22 +23,22 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [Setup] Project Dependencies and Configuration
 
-**T001** [P] Install new dependencies
+**T001** [P] Install new dependencies [X]
 - File: `package.json`
 - Add: `chokidar@^3.6.0`, `simple-git@^3.28.0`
 - Run: `npm install`
 
-**T002** [P] Update TypeScript configuration
+**T002** [P] Update TypeScript configuration [X]
 - File: `tsconfig.json`
 - Ensure: Node.js types include fs, path, process
 - Add: Type definitions for chokidar and simple-git
 
-**T003** [P] Create watcher configuration schema
+**T003** [P] Create watcher configuration schema [X]
 - File: `src/models/WatcherConfig.ts`
 - Define: Interface for watcher configuration options
 - Include: debounceDelay, batchSize, maxQueueSize, ignorePatterns, etc.
 
-**T004** [P] Update CLI command structure
+**T004** [P] Update CLI command structure [X]
 - File: `src/cli/index.ts`
 - Import: New watch and hooks commands
 - Register: Commands with commander.js
@@ -49,45 +49,45 @@ This document provides an actionable task list for implementing the file watcher
 
 ### [Foundation] Core Infrastructure
 
-**T005** Update database schema for watcher support
+**T005** Update database schema for watcher support [X]
 - File: `src/services/database/migrations/003_watcher.sql`
 - Create: Tables for file_change_events, ignore_patterns, git_hooks, watcher_state
 - Add: Canonical path column to index_entries
 - Create: Necessary indexes
 
-**T006** [P] Create base error types for watcher
+**T006** [P] Create base error types for watcher [X]
 - File: `src/lib/errors/WatcherErrors.ts`
 - Define: FileAccessError, WatcherTimeoutError, GitHookError
 - Include: Error categorization (transient, permanent, fatal)
 
-**T007** [P] Implement retry manager with exponential backoff
+**T007** [P] Implement retry manager with exponential backoff [X]
 - File: `src/lib/RetryManager.ts`
 - Implement: Retry logic with configurable attempts (3) and delays (1s, 2s, 4s)
 - Handle: Different error categories
 - Export: RetryManager class
 
-**T008** [P] Create file system utilities
+**T008** [P] Create file system utilities [X]
 - File: `src/lib/FileSystemUtils.ts`
 - Implement: getCanonicalPath, checkFileAccess, detectFilesystemType
 - Handle: Symlinks, permissions, network drives
 
-**T009** Create incremental indexer base
+**T009** Create incremental indexer base [X]
 - File: `src/services/indexer/IncrementalIndexer.ts`
 - Implement: Base incremental indexing logic
 - Use: Existing database service
 - Support: Batch processing with transactions
 
-**T010** [P] Set up logging for watcher operations
+**T010** [P] Set up logging for watcher operations [X]
 - File: `src/cli/utils/WatcherLogger.ts`
 - Extend: Existing logger for watcher-specific needs
 - Support: JSON lines format to `.codeindex/logs/watcher.jsonl`
 
-**T011** [P] Create performance monitoring utilities
+**T011** [P] Create performance monitoring utilities [X]
 - File: `src/lib/PerformanceMonitor.ts`
 - Track: Memory usage, event processing times
 - Alert: When thresholds exceeded (400MB memory)
 
-**T012** Initialize watcher state management
+**T012** Initialize watcher state management [X]
 - File: `src/services/watcher/WatcherState.ts`
 - Implement: State persistence to database
 - Track: watching status, events processed, memory usage

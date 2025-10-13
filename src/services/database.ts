@@ -59,6 +59,26 @@ export class DatabaseService {
   }
 
   /**
+   * Prepares a SQL statement for execution
+   * @param sql SQL query to prepare
+   * @returns Prepared statement
+   */
+  prepare(sql: string): Database.Statement {
+    if (!this.db) throw new Error('Database not connected');
+    return this.db.prepare(sql);
+  }
+
+  /**
+   * Creates a database transaction
+   * @param fn Transaction function
+   * @returns Transaction function
+   */
+  transaction<T extends (...args: any[]) => any>(fn: T): T {
+    if (!this.db) throw new Error('Database not connected');
+    return this.db.transaction(fn) as unknown as T;
+  }
+
+  /**
    * Initializes database schema
    */
   private initializeSchema(): void {
