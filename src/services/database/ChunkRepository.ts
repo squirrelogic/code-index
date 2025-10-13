@@ -8,6 +8,7 @@ import { Chunk } from '../../models/Chunk.js';
 import { ChunkType, Language } from '../../models/ChunkTypes.js';
 import type { ChunkQuery, ChunkQueryResult } from '../../models/ChunkQuery.js';
 import { randomUUID } from 'crypto';
+import { ChunkHasher } from '../chunker/ChunkHasher.js';
 
 /**
  * Chunk statistics interface
@@ -26,10 +27,12 @@ export interface ChunkStatistics {
 export class ChunkRepository {
   private db: Database;
   private preparedStatements: Map<string, Statement>;
+  private hasher: ChunkHasher;
 
   constructor(database: Database) {
     this.db = database;
     this.preparedStatements = new Map();
+    this.hasher = new ChunkHasher();
     this.prepareStatements();
   }
 
@@ -111,15 +114,53 @@ export class ChunkRepository {
 
   /**
    * Save a chunk (insert or update if hash exists)
+   * Detects and logs hash collisions
    * @param chunk Chunk to save
    * @returns Saved chunk with generated ID if new
+   * @throws Error if hash collision detected (same hash, different content)
    */
   public saveChunk(chunk: Chunk): Chunk {
     // Check if chunk with this hash already exists
     const existing = this.findByHash(chunk.chunkHash);
 
     if (existing) {
-      // Update existing chunk
+      // Validate that the normalized content matches (detect hash collision)
+      const contentsMatch = this.hasher.compareChunks(
+        existing.content,
+        chunk.content
+      );
+
+      if (!contentsMatch) {
+        // HASH COLLISION DETECTED!
+        const error = new Error(
+          `Hash collision detected: chunk hash ${chunk.chunkHash} already exists with different content.\n` +
+          `Existing chunk: "${existing.name}" in file ${existing.fileId} (lines ${existing.startLine}-${existing.endLine})\n` +
+          `New chunk: "${chunk.name}" in file ${chunk.fileId} (lines ${chunk.startLine}-${chunk.endLine})\n` +
+          `This should never happen with SHA-256. Please report this issue.`
+        );
+
+        // Log the collision at ERROR level
+        console.error('⚠️  CRITICAL: Hash collision detected!', {
+          hash: chunk.chunkHash,
+          existing: {
+            id: existing.id,
+            name: existing.name,
+            fileId: existing.fileId,
+            lines: `${existing.startLine}-${existing.endLine}`,
+            contentLength: existing.content.length,
+          },
+          new: {
+            name: chunk.name,
+            fileId: chunk.fileId,
+            lines: `${chunk.startLine}-${chunk.endLine}`,
+            contentLength: chunk.content.length,
+          },
+        });
+
+        throw error;
+      }
+
+      // Contents match - safe to update
       const stmt = this.preparedStatements.get('update')!;
       stmt.run({
         chunk_hash: chunk.chunkHash,
