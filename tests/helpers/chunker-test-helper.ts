@@ -47,6 +47,18 @@ export async function createTestChunker(projectRoot: string = '/test'): Promise<
 }
 
 /**
+ * Get a configured parser for a specific language
+ * @param language Language name ('typescript', 'javascript', or 'python')
+ * @returns Configured Parser instance
+ */
+export async function getLanguageParser(language: string): Promise<Parser> {
+  const parser = new Parser();
+  const grammar = await loadGrammar(language);
+  parser.setLanguage(grammar);
+  return parser;
+}
+
+/**
  * Parse content and chunk it in one operation
  * @param filePath File path (used for language detection and module path)
  * @param content Source code content

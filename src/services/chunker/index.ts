@@ -8,3 +8,4 @@ export { FunctionExtractor, type ExtractedFunction } from './FunctionExtractor.j
 export { ContextExtractor } from './ContextExtractor.js';
 export { DocumentationLinker } from './DocumentationLinker.js';
 export { ChunkHasher } from './ChunkHasher.js';
+export { ChunkValidator, type ValidationResult } from './ChunkValidator.js';
