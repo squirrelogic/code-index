@@ -430,4 +430,185 @@ def test(x):
       expect(chunks.length).toBeGreaterThan(0);
     });
   });
+
+  describe('Large Chunk Warning System (T050)', () => {
+    it('should NOT warn for functions below threshold', async () => {
+      // Create a function with 100 lines (below 5000 threshold)
+      const lines = Array.from({ length: 100 }, (_, i) => `  // Line ${i}`);
+      const content = `
+        function normalFunction() {
+          ${lines.join('\n')}
+          return 0;
+        }
+      `;
+
+      const originalWarn = console.warn;
+      const warnings: string[] = [];
+      console.warn = (...args: any[]) => {
+        warnings.push(args.join(' '));
+      };
+
+      try {
+        const chunks = await parseAndChunk('test.ts', content, Language.TypeScript);
+        expect(chunks).toHaveLength(1);
+        expect(chunks[0].name).toBe('normalFunction');
+        expect(chunks[0].lineCount).toBeLessThan(5000);
+
+        // Should NOT have warnings
+        const chunkWarnings = warnings.filter(w => w.includes('Large chunk'));
+        expect(chunkWarnings.length).toBe(0);
+      } finally {
+        console.warn = originalWarn;
+      }
+    });
+
+    it('should warn when function exceeds 5000 lines', async () => {
+      // Create a function with 5001 lines (above 5000 threshold)
+      const lines = Array.from({ length: 5001 }, (_, i) => `  // Line ${i}`);
+      const content = `
+        function veryLargeFunction() {
+          ${lines.join('\n')}
+          return 0;
+        }
+      `;
+
+      const originalWarn = console.warn;
+      const warnings: string[] = [];
+      console.warn = (...args: any[]) => {
+        warnings.push(args.join(' '));
+      };
+
+      try {
+        const chunks = await parseAndChunk('test.ts', content, Language.TypeScript);
+        expect(chunks).toHaveLength(1);
+        expect(chunks[0].name).toBe('veryLargeFunction');
+        expect(chunks[0].lineCount).toBeGreaterThan(5000);
+
+        // Should have warning
+        const chunkWarnings = warnings.filter(w => w.includes('Large chunk'));
+        expect(chunkWarnings.length).toBeGreaterThan(0);
+        expect(chunkWarnings[0]).toContain('veryLargeFunction');
+        expect(chunkWarnings[0]).toContain('5000');
+      } finally {
+        console.warn = originalWarn;
+      }
+    });
+
+    it('should include file path in warning message', async () => {
+      // Create a large function
+      const lines = Array.from({ length: 5001 }, (_, i) => `  // Line ${i}`);
+      const content = `
+        function hugeFunction() {
+          ${lines.join('\n')}
+        }
+      `;
+
+      const originalWarn = console.warn;
+      const warnings: string[] = [];
+      console.warn = (...args: any[]) => {
+        warnings.push(args.join(' '));
+      };
+
+      try {
+        const chunks = await parseAndChunk('/path/to/large-file.ts', content, Language.TypeScript);
+        expect(chunks).toHaveLength(1);
+
+        // Warning should include file path
+        const chunkWarnings = warnings.filter(w => w.includes('Large chunk'));
+        expect(chunkWarnings.length).toBeGreaterThan(0);
+        expect(chunkWarnings[0]).toContain('large-file.ts');
+      } finally {
+        console.warn = originalWarn;
+      }
+    });
+
+    it('should include line count in warning message', async () => {
+      // Create a large function
+      const lines = Array.from({ length: 6000 }, (_, i) => `  // Line ${i}`);
+      const content = `
+        function massiveFunction() {
+          ${lines.join('\n')}
+        }
+      `;
+
+      const originalWarn = console.warn;
+      const warnings: string[] = [];
+      console.warn = (...args: any[]) => {
+        warnings.push(args.join(' '));
+      };
+
+      try {
+        const chunks = await parseAndChunk('test.ts', content, Language.TypeScript);
+        expect(chunks).toHaveLength(1);
+        expect(chunks[0].lineCount).toBeGreaterThan(6000);
+
+        // Warning should include actual line count
+        const chunkWarnings = warnings.filter(w => w.includes('Large chunk'));
+        expect(chunkWarnings.length).toBeGreaterThan(0);
+        expect(chunkWarnings[0]).toMatch(/\d{4,}/); // Should have 4+ digit number
+      } finally {
+        console.warn = originalWarn;
+      }
+    });
+
+    it('should still create chunk despite warning', async () => {
+      // Create a large function
+      const lines = Array.from({ length: 5001 }, (_, i) => `  return ${i};`);
+      const content = `
+        function warnedFunction() {
+          ${lines.join('\n')}
+        }
+      `;
+
+      const originalWarn = console.warn;
+      console.warn = () => {}; // Suppress warnings
+
+      try {
+        const chunks = await parseAndChunk('test.ts', content, Language.TypeScript);
+
+        // Chunk should be created successfully
+        expect(chunks).toHaveLength(1);
+        expect(chunks[0].name).toBe('warnedFunction');
+        expect(chunks[0].chunkHash).toBeTruthy();
+        expect(chunks[0].content).toBeTruthy();
+        expect(chunks[0].lineCount).toBeGreaterThan(5000);
+      } finally {
+        console.warn = originalWarn;
+      }
+    });
+
+    it('should warn for each large function independently', async () => {
+      // Create multiple large functions
+      const lines1 = Array.from({ length: 5001 }, (_, i) => `  // A ${i}`);
+      const lines2 = Array.from({ length: 6000 }, (_, i) => `  // B ${i}`);
+      const content = `
+        function largeA() {
+          ${lines1.join('\n')}
+        }
+
+        function largeB() {
+          ${lines2.join('\n')}
+        }
+      `;
+
+      const originalWarn = console.warn;
+      const warnings: string[] = [];
+      console.warn = (...args: any[]) => {
+        warnings.push(args.join(' '));
+      };
+
+      try {
+        const chunks = await parseAndChunk('test.ts', content, Language.TypeScript);
+        expect(chunks).toHaveLength(2);
+
+        // Should have 2 warnings (one for each)
+        const chunkWarnings = warnings.filter(w => w.includes('Large chunk'));
+        expect(chunkWarnings.length).toBe(2);
+        expect(chunkWarnings.some(w => w.includes('largeA'))).toBe(true);
+        expect(chunkWarnings.some(w => w.includes('largeB'))).toBe(true);
+      } finally {
+        console.warn = originalWarn;
+      }
+    });
+  });
 });
