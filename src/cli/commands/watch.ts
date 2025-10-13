@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import { WatcherConfig } from '../../models/WatcherConfig.js';
 import { FileWatcher } from '../../services/watcher/FileWatcher.js';
 import { BatchProcessor, BatchProcessingResult } from '../../services/watcher/BatchProcessor.js';
-import { IncrementalIndexer } from '../../services/indexer/IncrementalIndexerAdapter.js';
+import { IncrementalIndexer } from '../../services/indexer/IncrementalIndexer.js';
 import { DatabaseService as Database } from '../../services/database.js';
 import { WatcherLogger } from '../utils/WatcherLogger.js';
 import { OutputFormatter } from '../utils/output.js';
@@ -66,9 +66,15 @@ async function executeWatchCommand(options: WatchCommandOptions): Promise<void> 
       batchSize: parseInt(options.batchSize, 10) || 100,
       ignorePatterns: options.ignore || [],
       followSymlinks: options.followSymlinks,
-      maxDepth: options.maxDepth ? parseInt(options.maxDepth, 10) : undefined,
-      maxMemoryMB: 400,
-      maxQueueSize: 10000
+      depth: options.maxDepth ? parseInt(options.maxDepth, 10) : -1,
+      memoryThreshold: 400,
+      memoryCheckInterval: 30,
+      maxQueueSize: 10000,
+      retryAttempts: 3,
+      retryDelay: 1000,
+      useGitignore: true,
+      watchHidden: false,
+      verbose: options.verbose || false
     };
 
     // Validate configuration
@@ -83,7 +89,7 @@ async function executeWatchCommand(options: WatchCommandOptions): Promise<void> 
     }
 
     // Initialize services
-    const logger = new WatcherLogger(projectRoot, options.verbose);
+    const logger = new WatcherLogger(projectRoot, options.verbose ? 'verbose' : undefined);
     const database = new Database(dbPath);
     const indexer = new IncrementalIndexer(database, projectRoot);
     const batchProcessor = new BatchProcessor(

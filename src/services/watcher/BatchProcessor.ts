@@ -4,7 +4,7 @@ import {
   FileChangeType,
   ProcessingStatus
 } from '../../models/FileChangeEvent.js';
-import { IncrementalIndexer } from '../indexer/IncrementalIndexerAdapter.js';
+import { IncrementalIndexer } from '../indexer/IncrementalIndexer.js';
 import { WatcherLogger } from '../../cli/utils/WatcherLogger.js';
 import { RetryManager } from '../../lib/RetryManager.js';
 
