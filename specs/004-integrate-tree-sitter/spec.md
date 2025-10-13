@@ -85,49 +85,62 @@ A developer wants to efficiently detect when code elements change. The parser ge
 
 **Acceptance Scenarios**:
 
-1. **Given** a parsed file, **When** symbol content unchanged, **Then** hash remains stable across parses
+1. **Given** a parsed file, **When** symbol semantic content unchanged, **Then** hash remains stable across parses
 2. **Given** a function body modification, **When** reparsed, **Then** only that function's hash changes
-3. **Given** whitespace or comment changes, **When** reparsed, **Then** symbol hashes remain unchanged
-4. **Given** identical code in different files, **When** parsed, **Then** equivalent symbols have same hashes
+3. **Given** whitespace or comment changes only, **When** reparsed, **Then** symbol hashes remain unchanged (semantic content unchanged)
+4. **Given** identical semantic content in different files, **When** parsed, **Then** equivalent symbols have same hashes
 
 ---
 
 ### Edge Cases
 
 - What happens when parsing extremely large files (10MB+)?
-- How does parser handle mixed language files (e.g., JSX, TSX)?
-- What happens with malformed or incomplete syntax?
+- JSX/TSX files are supported as distinct language variants with dedicated parsers
+- What happens with malformed or incomplete syntax? (Covered by syntax-level error recovery)
 - How does parser handle Unicode and special characters in identifiers?
 - What happens when parsing minified or obfuscated code?
 - How does system handle files with conflicting or ambiguous syntax?
 - What happens when language version features aren't supported?
 - How does parser handle macro expansions or preprocessor directives?
 
+## Clarifications
+
+### Session 2025-10-12
+
+- Q: When a syntax error is encountered mid-file, what level of error recovery should the parser attempt? → A: Syntax-level recovery - Skip malformed statements/expressions, continue parsing next top-level constructs (recommended for indexing use case)
+- Q: What is the complete set of symbol kinds that the parser must recognize and distinguish? → A: Comprehensive - function, class, variable, interface, enum, type alias, constant, method, property, module, namespace, parameter, import/export, decorator/annotation
+- Q: What output format should the parser module use for returning parse results? → A: Plain objects - Plain JavaScript objects matching TypeScript interfaces (recommended for performance and simplicity)
+- Q: What should the hash calculation include to ensure stable change detection? → A: Semantic content - Include symbol signature and body structure, but exclude whitespace and comments (recommended for change detection)
+- Q: How should the parser handle JSX/TSX files and other language variants? → A: Language variants - Treat JSX/TSX as distinct languages with their own Tree-sitter parsers (recommended for real-world codebases)
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: Parser MUST support TypeScript, JavaScript, and Python languages initially
-- **FR-002**: Parser MUST extract symbol information including name, kind, and location span
+- **FR-001**: Parser MUST support TypeScript, JavaScript, Python languages initially, plus JSX and TSX as distinct language variants with dedicated Tree-sitter parsers
+- **FR-001a**: Parser MUST detect language variant from file extension (.js, .ts, .jsx, .tsx, .py) and select appropriate Tree-sitter parser
+- **FR-002**: Parser MUST extract symbol information including name, kind (function, class, variable, interface, enum, type alias, constant, method, property, module, namespace, parameter, import/export, decorator/annotation), and location span
 - **FR-003**: Parser MUST identify parent-child relationships between symbols (scoping)
 - **FR-004**: Parser MUST extract function/method signatures with parameter information
 - **FR-005**: Parser MUST identify and extract import and export statements
 - **FR-006**: Parser MUST extract documentation comments and associate with symbols
 - **FR-007**: Parser MUST identify function calls and method invocations
-- **FR-008**: Parser MUST continue parsing after encountering syntax errors (partial parse)
-- **FR-009**: Parser MUST generate stable content hashes for each symbol
+- **FR-008**: Parser MUST continue parsing after encountering syntax errors using syntax-level recovery (skip malformed statements/expressions, continue with next top-level constructs)
+- **FR-009**: Parser MUST generate stable content hashes for each symbol based on semantic content (signature and body structure), excluding whitespace and comments
 - **FR-010**: Parser MUST return file path and detected language for each parse result
 - **FR-011**: Parser MUST extract both block and inline comments with locations
 - **FR-012**: Parser MUST complete parsing within reasonable time limits
 - **FR-013**: Parser MUST handle files up to 10MB in size
-- **FR-014**: Parser module MUST provide consistent output format across languages
+- **FR-014**: Parser module MUST return plain JavaScript objects matching TypeScript interfaces, providing consistent output format across languages
 - **FR-015**: Parser MUST NOT attempt full type checking or type inference
-- **FR-016**: Error handling MUST be fast and not block parsing of valid portions
+- **FR-016**: Error handling MUST be fast, skip invalid constructs at statement/expression level, and not block parsing of valid portions
 - **FR-017**: Parser MUST support incremental parsing for modified sections
 
 ### Key Entities
 
-- **Symbol**: Represents a code element with name, kind (function/class/variable), span, parents, signature, documentation, and hash
+*Note: All entities are TypeScript interfaces defining plain JavaScript object shapes.*
+
+- **Symbol**: Represents a code element with name, kind (one of: function, class, variable, interface, enum, type alias, constant, method, property, module, namespace, parameter, import/export, decorator/annotation), span, parents, signature, documentation, and hash
 - **Import/Export**: Represents module dependency with source, target, and imported/exported symbols
 - **Function Call**: Represents invocation with caller location, callee name, and arguments count
 - **Comment**: Represents documentation or inline comment with text, location, and associated symbol
@@ -139,7 +152,7 @@ A developer wants to efficiently detect when code elements change. The parser ge
 ### Measurable Outcomes
 
 - **SC-001**: Parser processes 1,000 lines of code per second on average hardware
-- **SC-002**: Partial parsing recovers from 95% of syntax errors while preserving valid symbols
+- **SC-002**: Syntax-level recovery successfully continues parsing after 95% of syntax errors, extracting valid top-level constructs that follow the error
 - **SC-003**: Memory usage stays under 100MB for files up to 1MB in size
 - **SC-004**: Symbol extraction accuracy exceeds 99% for well-formed code
 - **SC-005**: Parser handles 90% of real-world code patterns in supported languages
