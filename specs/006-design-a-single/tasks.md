@@ -249,22 +249,22 @@ description: "Task list for database schema implementation"
 
 ### Implementation for User Story 6
 
-- [ ] T066 [US6] Create migration `sql/migrations/003_add_calls_table.sql` with calls table DDL
-- [ ] T067 [US6] Add calls table schema with fields: id (AUTOINCREMENT), caller_symbol_id, callee_symbol_id, call_type, context, line_number, created_at
-- [ ] T068 [US6] Add calls table indexes in migration 003:
+- [X] T066 [US6] Create migration `sql/migrations/003_add_calls_table.sql` with calls table DDL
+- [X] T067 [US6] Add calls table schema with fields: id (AUTOINCREMENT), caller_symbol_id, callee_symbol_id, call_type, context, line_number, created_at
+- [X] T068 [US6] Add calls table indexes in migration 003:
   - `idx_calls_caller` (compound on caller_symbol_id, callee_symbol_id)
   - `idx_calls_callee` (on callee_symbol_id for reverse queries)
-- [ ] T069 [US6] Add foreign key constraints for caller_symbol_id and callee_symbol_id (CASCADE on delete)
-- [ ] T070 [US6] Define `Call` entity interface in `src/models/database-schema.ts`
-- [ ] T071 [US6] Implement `CallGraphRepository` class in `src/services/call-graph-repository.ts` with methods:
+- [X] T069 [US6] Add foreign key constraints for caller_symbol_id and callee_symbol_id (CASCADE on delete)
+- [X] T070 [US6] Define `Call` entity interface in `src/models/database-schema.ts`
+- [X] T071 [US6] Implement `CallGraphRepository` class in `src/services/call-graph-repository.ts` with methods:
   - `insert(call: Call): string` - Create call relationship
   - `findCallees(callerSymbolId: string): Call[]` - Find functions called by X (<100ms target)
   - `findCallers(calleeSymbolId: string): Call[]` - Find all callers of function Y (<100ms target)
   - `findCallGraph(symbolId: string, maxDepth: number): CallGraph` - Transitive call graph using recursive CTE
-- [ ] T072 [US6] Implement cycle detection for circular dependencies in `src/services/call-graph-repository.ts`:
+- [X] T072 [US6] Implement cycle detection for circular dependencies in `src/services/call-graph-repository.ts`:
   - Use visited set during graph traversal to detect cycles
   - Return cycle information without infinite loops
-- [ ] T073 [US6] Add query performance monitoring for call graph operations (log queries >100ms)
+- [X] T073 [US6] Add query performance monitoring for call graph operations (log queries >100ms)
 
 **Checkpoint**: All user stories (US1-US6) should now be independently functional
 
@@ -274,21 +274,21 @@ description: "Task list for database schema implementation"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T074 [P] Create SQL schema validation script that verifies all tables and indexes exist
-- [ ] T075 [P] Add database statistics reporting function (table sizes, row counts, index overhead)
-- [ ] T076 [P] Implement query plan analyzer helper (`EXPLAIN QUERY PLAN`) in `src/lib/query-analyzer.ts`
-- [ ] T077 [P] Create database maintenance scheduler for periodic cleanup in `src/services/maintenance-scheduler.ts`:
+- [X] T074 [P] Create SQL schema validation script that verifies all tables and indexes exist
+- [X] T075 [P] Add database statistics reporting function (table sizes, row counts, index overhead)
+- [X] T076 [P] Implement query plan analyzer helper (`EXPLAIN QUERY PLAN`) in `src/lib/query-analyzer.ts`
+- [X] T077 [P] Create database maintenance scheduler for periodic cleanup in `src/services/maintenance-scheduler.ts`:
   - Run cleanup_deleted_records every 24 hours
   - Run ANALYZE after cleanup
   - Run VACUUM if significant deletions (>1000 records)
-- [ ] T078 [P] Add WAL checkpoint helper function (`PRAGMA wal_checkpoint(TRUNCATE)`)
-- [ ] T079 [P] Document single-writer enforcement pattern in `src/services/write-lock.ts`:
+- [X] T078 [P] Add WAL checkpoint helper function (`PRAGMA wal_checkpoint(TRUNCATE)`)
+- [X] T079 [P] Document single-writer enforcement pattern in `src/services/write-lock.ts`:
   - `acquireWriteLock()` using `BEGIN IMMEDIATE`
   - Handle `SQLITE_BUSY` with exponential backoff
   - Timeout configuration (default 5000ms)
-- [ ] T080 Add comprehensive JSDoc comments to all repository classes
-- [ ] T081 Update quickstart.md with implementation examples if changes were made
-- [ ] T082 Create database initialization helper `src/lib/database-init.ts` that combines all setup steps
+- [X] T080 Add comprehensive JSDoc comments to all repository classes
+- [X] T081 Update quickstart.md with implementation examples if changes were made
+- [X] T082 Create database initialization helper `src/lib/database-init.ts` that combines all setup steps
 
 ---
 

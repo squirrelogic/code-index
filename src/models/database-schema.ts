@@ -220,3 +220,62 @@ export interface SimilarityResult {
 	/** Associated chunk data (optional, for JOIN queries) */
 	chunk?: Chunk;
 }
+
+/**
+ * Call types for function/method invocations
+ */
+export type CallType = 'direct' | 'indirect' | 'dynamic' | 'import';
+
+/**
+ * Call entity representing function/method call relationships
+ */
+export interface Call {
+	/** Unique identifier (auto-increment) */
+	id: number;
+	/** Symbol making the call (caller) */
+	caller_symbol_id: string;
+	/** Symbol being called (callee) */
+	callee_symbol_id: string;
+	/** Type of call */
+	call_type: CallType;
+	/** Surrounding code context (optional) */
+	context: string | null;
+	/** Line number where call occurs (optional) */
+	line_number: number | null;
+	/** Creation timestamp (Unix epoch seconds) */
+	created_at: number;
+}
+
+/**
+ * Call graph node representing a symbol with its call relationships
+ */
+export interface CallGraphNode {
+	/** Symbol identifier */
+	symbol_id: string;
+	/** Symbol name */
+	symbol_name: string;
+	/** Symbol type */
+	symbol_type: SymbolType;
+	/** Depth in the call graph (0 = root) */
+	depth: number;
+	/** Direct callees (functions this symbol calls) */
+	callees: CallGraphNode[];
+	/** Whether a cycle was detected at this node */
+	has_cycle: boolean;
+}
+
+/**
+ * Complete call graph structure
+ */
+export interface CallGraph {
+	/** Root symbol identifier */
+	root_symbol_id: string;
+	/** Maximum depth traversed */
+	max_depth: number;
+	/** Root node with nested call relationships */
+	root: CallGraphNode;
+	/** Whether any cycles were detected in the graph */
+	has_cycles: boolean;
+	/** List of cycle paths detected (if any) */
+	cycle_paths: string[][];
+}

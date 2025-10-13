@@ -16,6 +16,17 @@ export interface ValidationResult {
 }
 
 /**
+ * Schema structure validation result
+ */
+export interface SchemaStructureResult {
+	valid: boolean;
+	missingTables: string[];
+	missingIndexes: string[];
+	extraTables: string[];
+	extraIndexes: string[];
+}
+
+/**
  * Schema Validator
  *
  * Validates database integrity and constraints
@@ -161,5 +172,130 @@ export class SchemaValidator {
 			sizeBytes,
 			sizeMB: sizeBytes / 1024 / 1024,
 		};
+	}
+
+	/**
+	 * Verify that all expected tables exist in the database
+	 *
+	 * @param expectedTables - Array of table names that should exist
+	 * @returns Schema structure validation result
+	 */
+	validateSchemaStructure(
+		expectedTables: string[],
+		expectedIndexes: string[]
+	): SchemaStructureResult {
+		// Get all existing tables
+		const existingTables = this.db
+			.prepare(
+				`
+			SELECT name FROM sqlite_master
+			WHERE type = 'table'
+			  AND name NOT LIKE 'sqlite_%'
+			ORDER BY name
+		`
+			)
+			.all() as Array<{ name: string }>;
+
+		const existingTableNames = new Set(existingTables.map((t) => t.name));
+
+		// Get all existing indexes
+		const existingIndexes = this.db
+			.prepare(
+				`
+			SELECT name FROM sqlite_master
+			WHERE type = 'index'
+			  AND name NOT LIKE 'sqlite_%'
+			ORDER BY name
+		`
+			)
+			.all() as Array<{ name: string }>;
+
+		const existingIndexNames = new Set(existingIndexes.map((i) => i.name));
+
+		// Find missing tables
+		const missingTables = expectedTables.filter((t) => !existingTableNames.has(t));
+
+		// Find extra tables (not expected)
+		const extraTables = Array.from(existingTableNames).filter(
+			(t) => !expectedTables.includes(t)
+		);
+
+		// Find missing indexes
+		const missingIndexes = expectedIndexes.filter((i) => !existingIndexNames.has(i));
+
+		// Find extra indexes (not expected)
+		const extraIndexes = Array.from(existingIndexNames).filter(
+			(i) => !expectedIndexes.includes(i)
+		);
+
+		return {
+			valid: missingTables.length === 0 && missingIndexes.length === 0,
+			missingTables,
+			missingIndexes,
+			extraTables,
+			extraIndexes,
+		};
+	}
+
+	/**
+	 * Get the expected schema structure based on migrations
+	 *
+	 * @returns Object with expected tables and indexes
+	 */
+	static getExpectedSchema(): {
+		tables: string[];
+		indexes: string[];
+	} {
+		return {
+			tables: [
+				// From migration 001
+				'files',
+				'symbols',
+				'xrefs',
+				'search', // FTS5 virtual table
+				'meta',
+				'migration_history',
+				// From migration 002
+				'chunks',
+				'embeddings',
+				// From migration 003
+				'calls',
+			],
+			indexes: [
+				// Files table indexes
+				'idx_files_path',
+				'idx_files_hash',
+				'idx_files_language',
+				// Symbols table indexes
+				'idx_symbols_name',
+				'idx_symbols_file_type',
+				'idx_symbols_deleted',
+				// Cross-references indexes
+				'idx_xrefs_source',
+				'idx_xrefs_target',
+				'idx_xrefs_type',
+				// Migration history index
+				'idx_migration_version',
+				// Chunks table indexes
+				'idx_chunks_file',
+				'idx_chunks_symbol',
+				'idx_chunks_id',
+				// Embeddings table index
+				'idx_embeddings_model',
+				// Calls table indexes
+				'idx_calls_caller',
+				'idx_calls_callee',
+			],
+		};
+	}
+
+	/**
+	 * Validate complete schema structure against expected schema
+	 *
+	 * @returns Schema structure validation result
+	 */
+	validateCompleteSchema(): SchemaStructureResult {
+		const expected = SchemaValidator.getExpectedSchema();
+		return this.validateSchemaStructure(expected.tables, expected.indexes);
 	}
 }
