@@ -55,3 +55,29 @@ export interface DatabaseConfig {
 	dbPath: string;
 	pragmaConfig?: Partial<SQLitePragmaConfig>;
 }
+
+// ============================================================================
+// Entity Interfaces
+// ============================================================================
+
+/**
+ * File entity representing a source code file
+ */
+export interface File {
+	/** Unique identifier (UUID v4 or ULID) */
+	id: string;
+	/** Project-relative file path */
+	file_path: string;
+	/** SHA-256 hash of file content for change detection */
+	content_hash: string;
+	/** Programming language identifier */
+	language: string;
+	/** File size in bytes */
+	size: number;
+	/** Last modification timestamp (Unix epoch seconds) */
+	modified_at: number;
+	/** Indexing timestamp (Unix epoch seconds) */
+	indexed_at: number;
+	/** Soft delete timestamp (NULL = active, Unix epoch = deleted) */
+	deleted_at: number | null;
+}

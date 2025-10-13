@@ -62,21 +62,21 @@ description: "Task list for database schema implementation"
 
 ### Implementation for User Story 1
 
-- [ ] T015 [P] [US1] Complete files table schema in `sql/migrations/001_initial_schema.sql` (if not done in T011)
-- [ ] T016 [P] [US1] Add files table indexes in `sql/migrations/001_initial_schema.sql`:
+- [X] T015 [P] [US1] Complete files table schema in `sql/migrations/001_initial_schema.sql` (if not done in T011)
+- [X] T016 [P] [US1] Add files table indexes in `sql/migrations/001_initial_schema.sql`:
   - `idx_files_path` (UNIQUE, partial WHERE deleted_at IS NULL)
   - `idx_files_hash` (for content hash lookups)
   - `idx_files_language` (for language-based queries)
-- [ ] T017 [US1] Define `File` entity TypeScript interface in `src/models/database-schema.ts` with fields: id, file_path, content_hash, language, size, modified_at, indexed_at, deleted_at
-- [ ] T018 [US1] Implement `FileRepository` class in `src/services/file-repository.ts` with methods:
+- [X] T017 [US1] Define `File` entity TypeScript interface in `src/models/database-schema.ts` with fields: id, file_path, content_hash, language, size, modified_at, indexed_at, deleted_at
+- [X] T018 [US1] Implement `FileRepository` class in `src/services/file-repository.ts` with methods:
   - `insert(file: File): string` - Insert new file record
   - `update(fileId: string, file: Partial<File>): void` - Update file metadata
   - `findByPath(path: string): File | null` - Find file by path
   - `findByHash(hash: string): File[]` - Find files by content hash (deduplication)
   - `softDelete(fileId: string): void` - Mark file as deleted
-- [ ] T019 [US1] Add logging for file operations in `src/services/file-repository.ts` (structured JSON lines format)
-- [ ] T020 [US1] Add query performance measurement wrapper for file queries (<10ms target)
-- [ ] T021 [US1] Implement batch file insert method using transactions for bulk operations
+- [X] T019 [US1] Add logging for file operations in `src/services/file-repository.ts` (structured JSON lines format)
+- [X] T020 [US1] Add query performance measurement wrapper for file queries (<10ms target)
+- [X] T021 [US1] Implement batch file insert method using transactions for bulk operations
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
