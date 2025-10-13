@@ -123,13 +123,6 @@ export class Chunk {
     if (!this.name || this.name.trim().length === 0) {
       throw new Error('Chunk name must not be empty');
     }
-
-    // Warning for large chunks (logged, not thrown)
-    if (this.lineCount > 5000) {
-      console.warn(
-        `Large chunk detected: ${this.name} in file ${this.fileId} has ${this.lineCount} lines (>5,000 line threshold)`
-      );
-    }
   }
 
   /**

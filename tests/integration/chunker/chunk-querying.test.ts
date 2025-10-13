@@ -9,9 +9,11 @@ import { ChunkRepository } from '../../../src/services/database/ChunkRepository.
 import { CodeChunker } from '../../../src/services/chunker/CodeChunker.js';
 import { ChunkQuery } from '../../../src/models/ChunkQuery.js';
 import { ChunkType, Language } from '../../../src/models/ChunkTypes.js';
-import { TreeSitterParser } from '../../../src/services/parser/TreeSitterParser.js';
 import { Chunk } from '../../../src/models/Chunk.js';
 import { randomUUID } from 'crypto';
+import { createTestDatabase } from '../../helpers/database-test-helper.js';
+import { createTestChunker, getLanguageParser } from '../../helpers/chunker-test-helper.js';
+import Parser from 'tree-sitter';
 
 // Test fixtures with diverse chunk types
 const typeScriptFixture = `
@@ -120,76 +122,13 @@ class PythonClass:
 describe('Chunk Querying Integration Tests (US4)', () => {
   let db: Database.Database;
   let repository: ChunkRepository;
-  let parser: TreeSitterParser;
   let chunker: CodeChunker;
 
   beforeAll(async () => {
-    // Create in-memory database
-    db = new Database(':memory:');
-
-    // Create schema
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS chunks (
-        id TEXT PRIMARY KEY,
-        chunk_hash TEXT NOT NULL UNIQUE,
-        file_id TEXT NOT NULL,
-        chunk_type TEXT NOT NULL,
-        name TEXT NOT NULL,
-        content TEXT NOT NULL,
-        normalized_content TEXT NOT NULL,
-        start_line INTEGER NOT NULL,
-        end_line INTEGER NOT NULL,
-        start_byte INTEGER NOT NULL,
-        end_byte INTEGER NOT NULL,
-        language TEXT NOT NULL,
-        context TEXT NOT NULL,
-        documentation TEXT,
-        signature TEXT,
-        line_count INTEGER NOT NULL,
-        character_count INTEGER NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE INDEX idx_chunks_hash ON chunks(chunk_hash);
-      CREATE INDEX idx_chunks_file ON chunks(file_id);
-      CREATE INDEX idx_chunks_type ON chunks(chunk_type);
-      CREATE INDEX idx_chunks_language ON chunks(language);
-      CREATE INDEX idx_chunks_name ON chunks(name);
-
-      CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-        chunk_id UNINDEXED,
-        name,
-        content,
-        documentation,
-        signature,
-        content=chunks,
-        content_rowid=rowid
-      );
-
-      CREATE TRIGGER chunks_fts_insert AFTER INSERT ON chunks BEGIN
-        INSERT INTO chunks_fts(rowid, chunk_id, name, content, documentation, signature)
-        VALUES (new.rowid, new.id, new.name, new.content, new.documentation, new.signature);
-      END;
-
-      CREATE TRIGGER chunks_fts_delete AFTER DELETE ON chunks BEGIN
-        DELETE FROM chunks_fts WHERE chunk_id = old.id;
-      END;
-
-      CREATE TRIGGER chunks_fts_update AFTER UPDATE ON chunks BEGIN
-        UPDATE chunks_fts SET
-          name = new.name,
-          content = new.content,
-          documentation = new.documentation,
-          signature = new.signature
-        WHERE chunk_id = new.id;
-      END;
-    `);
-
+    // Create test database with production schema
+    db = createTestDatabase();
     repository = new ChunkRepository(db);
-    parser = new TreeSitterParser();
-    await parser.initialize();
-    chunker = new CodeChunker(parser);
+    chunker = await createTestChunker('/test');
 
     // Chunk all fixtures and save to database
     const fixtures = [
@@ -200,7 +139,22 @@ describe('Chunk Querying Integration Tests (US4)', () => {
 
     for (const fixture of fixtures) {
       const fileId = randomUUID();
-      const chunks = await chunker.chunkFile(fixture.path, fixture.content, fixture.language, fileId);
+
+      // Get parser for this language
+      const parser = await getLanguageParser(
+        fixture.language === Language.TypeScript ? 'typescript' :
+        fixture.language === Language.JavaScript ? 'javascript' :
+        'python'
+      );
+
+      // Calculate appropriate buffer size
+      const bufferSize = fixture.content.length < 32768 ? 65536 : fixture.content.length * 2;
+
+      // Parse the content
+      const tree = parser.parse(fixture.content, undefined, { bufferSize });
+
+      // Chunk the file
+      const chunks = chunker.chunkFile(fixture.path, fileId, tree, fixture.language);
 
       // Save all chunks
       for (const chunk of chunks) {

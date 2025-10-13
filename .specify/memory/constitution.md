@@ -1,50 +1,132 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Code-Index CLI Constitution
+
+<!--
+Sync Impact Report:
+Version: 1.0.0 (Initial constitution)
+Modified principles: N/A (new document)
+Added sections: All sections are new
+Removed sections: N/A
+Templates requiring updates:
+  ✅ plan-template.md - Already aligned with Constitution Check section
+  ✅ spec-template.md - Already aligned with user story prioritization
+  ✅ tasks-template.md - Already aligned with independent story implementation
+  ✅ CLAUDE.md - Already references key principles from spec
+Follow-up TODOs: None
+-->
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Offline-First & Self-Contained
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+The code-index CLI MUST operate completely offline without network connectivity for all core features. All data storage MUST use local SQLite databases stored in project-relative paths. No external services, cloud dependencies, or network calls are permitted in core functionality. This ensures reliability, privacy, and speed regardless of network conditions.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Rationale**: Users need code indexing to work in air-gapped environments, on airplanes, or with unreliable networks. Local-first architecture eliminates latency, privacy concerns, and external dependencies.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Idempotent Operations
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+All CLI commands MUST be idempotent - running them multiple times produces the same result without errors or unintended side effects. Initialization can be re-run to restore missing components. Indexing can be re-run to rebuild the database. All operations MUST handle existing state gracefully.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Rationale**: Users should never fear running a command twice. Idempotency enables reliable automation, simplified error recovery, and reduced cognitive load.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Specification-Driven Development (Speckit Workflow)
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+All features MUST follow the Speckit workflow: Specify → Clarify → Plan → Tasks → Implement. Each feature begins with a specification in `specs/###-feature-name/spec.md` that defines user stories with priorities (P1, P2, P3), acceptance scenarios, and success criteria. Implementation planning happens in `plan.md`, task breakdown in `tasks.md`, and execution via `/speckit.implement`.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**: Structured feature development prevents scope creep, enables better collaboration, and ensures every feature has clear acceptance criteria before implementation begins.
+
+### IV. User Story Prioritization & Independence
+
+User stories MUST be prioritized (P1, P2, P3...) and independently implementable. Each user story must be testable on its own and deliver standalone value. P1 stories represent the MVP that can ship first. Stories MUST NOT create blocking dependencies on each other - foundational infrastructure is separated into a distinct phase.
+
+**Rationale**: Independent stories enable parallel development, incremental delivery, and allow teams to ship MVPs quickly. Users get value from P1 completion even if P2/P3 are delayed.
+
+### V. Performance & Efficiency Targets
+
+Performance requirements MUST be specified upfront and tracked throughout development. For code-index CLI: indexing at 1,000 files/second, search responses under 100ms for <100k files, memory usage under 500MB. Use benchmarking and profiling to verify these targets. Optimize critical paths first; avoid premature optimization elsewhere.
+
+**Rationale**: Performance is a feature, not an afterthought. Explicit targets prevent performance regressions and ensure the tool remains fast as features are added.
+
+### VI. Testing Discipline
+
+Testing requirements MUST be explicitly stated in feature specifications. When tests are required, they MUST be written before implementation (TDD). Tests are organized by type: contract tests (CLI interface validation), integration tests (component workflows), and unit tests (individual functions). Use Vitest for all testing.
+
+**Rationale**: Test-first development catches issues early and ensures code is designed for testability. Optional testing acknowledges that some features (documentation, scripts) may not require formal tests.
+
+### VII. Project-Relative Paths & Cross-Platform
+
+All file paths MUST be relative to project root and work identically on Windows, macOS, and Linux. Use Node.js path utilities, never hardcode separators. Configuration and data directories (`.codeindex/`, `.claude/`) MUST be consistently located at project root. CLI MUST use appropriate exit codes (0 for success, non-zero for failure).
+
+**Rationale**: Cross-platform consistency ensures users have identical experiences regardless of OS. Project-relative paths enable portability and version control of configurations.
+
+## Development Workflow
+
+### Feature Lifecycle
+
+1. **Specify** (`/speckit.specify`): Create feature spec with user stories, priorities, acceptance scenarios
+2. **Clarify** (`/speckit.clarify`): Resolve ambiguities with targeted questions
+3. **Plan** (`/speckit.plan`): Generate implementation plan, research, data models, contracts
+4. **Tasks** (`/speckit.tasks`): Break down plan into dependency-ordered tasks by user story
+5. **Implement** (`/speckit.implement`): Execute tasks, typically starting with P1 MVP
+
+### Task Organization
+
+Tasks MUST be grouped by user story to enable independent implementation. Foundational infrastructure (database setup, core models) is separated into a blocking "Foundational" phase that completes before any user stories begin. Within user stories, tasks can often run in parallel if marked `[P]` (different files, no dependencies).
+
+### MVP-First Approach
+
+The first complete implementation should focus on the P1 user story only: Setup → Foundational → User Story 1 → Test & Validate. This delivers the minimum viable product quickly. P2, P3 stories are added incrementally after P1 proves viable.
+
+## Quality Standards
+
+### Code Quality
+
+- TypeScript MUST use strict mode with no implicit `any`
+- All public APIs MUST have JSDoc comments
+- Use ESLint for linting, Prettier for formatting (configuration must be project-consistent)
+- Complexity violations (e.g., overly complex functions) MUST be justified in the Complexity Tracking section of `plan.md`
+
+### Error Handling
+
+- All errors MUST be logged to `.codeindex/logs/*.jsonl` in JSON lines format
+- CLI MUST provide helpful error messages with actionable next steps
+- Use appropriate exit codes for different failure types
+- Handle interruption signals gracefully (SIGINT, SIGTERM)
+
+### Output Formats
+
+- All commands MUST support both human-readable and JSON output (via `--json` flag)
+- Human-readable output uses clear formatting with chalk for colors
+- JSON output is suitable for scripting and automation
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### Constitution Authority
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+This constitution supersedes all other development practices. Feature specifications, implementation plans, and pull requests MUST comply with these principles. Any deviation MUST be documented with explicit justification in the relevant plan's Complexity Tracking section.
+
+### Amendments
+
+Constitution amendments require:
+1. Documented rationale explaining why the change is necessary
+2. Impact assessment on existing features and templates
+3. Migration plan for features that need updates
+4. Version bump following semantic versioning rules (see below)
+5. Update to all dependent templates in `.specify/templates/`
+
+### Versioning
+
+Constitution versions follow MAJOR.MINOR.PATCH:
+- **MAJOR**: Backward incompatible changes (e.g., removing/redefining core principles)
+- **MINOR**: New principles added or sections materially expanded
+- **PATCH**: Clarifications, typo fixes, non-semantic refinements
+
+### Compliance Review
+
+All code reviews MUST verify:
+- Specifications follow Speckit workflow and include prioritized user stories
+- Implementation plans include Constitution Check section
+- Tasks are organized by user story with independent testability
+- Performance targets are specified and tracked
+- Project structure matches plan.md decisions
+
+**Version**: 1.0.0 | **Ratified**: 2025-10-13 | **Last Amended**: 2025-10-13

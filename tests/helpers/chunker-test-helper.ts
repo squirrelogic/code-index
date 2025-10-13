@@ -91,7 +91,12 @@ export async function parseAndChunk(
   }
 
   parser.setLanguage(grammar);
-  const tree = parser.parse(content);
+
+  // Calculate appropriate buffer size (must be large enough for the source)
+  // Use 64KB for files < 32KB, otherwise use double the source size
+  const bufferSize = content.length < 32768 ? 65536 : content.length * 2;
+
+  const tree = parser.parse(content, undefined, { bufferSize });
 
   // Generate a file ID for testing
   const fileId = 'test-file-id';
