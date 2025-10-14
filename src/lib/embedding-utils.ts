@@ -39,7 +39,7 @@ export function encodeEmbedding(vector: number[]): Buffer {
 	const buffer = Buffer.allocUnsafe(EMBEDDING_BLOB_SIZE);
 
 	for (let i = 0; i < EMBEDDING_DIMENSIONS; i++) {
-		buffer.writeFloatLE(vector[i], i * 4);
+		buffer.writeFloatLE(vector[i] ?? 0, i * 4);
 	}
 
 	return buffer;
@@ -110,9 +110,11 @@ export function cosineSimilarity(
 	let magnitudeB = 0;
 
 	for (let i = 0; i < a.length; i++) {
-		dotProduct += a[i] * b[i];
-		magnitudeA += a[i] * a[i];
-		magnitudeB += b[i] * b[i];
+		const aVal = a[i] ?? 0;
+		const bVal = b[i] ?? 0;
+		dotProduct += aVal * bVal;
+		magnitudeA += aVal * aVal;
+		magnitudeB += bVal * bVal;
 	}
 
 	const magnitude = Math.sqrt(magnitudeA) * Math.sqrt(magnitudeB);
@@ -139,7 +141,8 @@ export function isValidEmbedding(vector: number[] | Float32Array): boolean {
 
 	// Check for NaN or Infinity values
 	for (let i = 0; i < vector.length; i++) {
-		if (!isFinite(vector[i])) {
+		const val = vector[i];
+		if (val === undefined || !isFinite(val)) {
 			return false;
 		}
 	}
@@ -159,7 +162,8 @@ export function isValidEmbedding(vector: number[] | Float32Array): boolean {
 export function normalizeVector(vector: number[]): number[] {
 	let magnitude = 0;
 	for (let i = 0; i < vector.length; i++) {
-		magnitude += vector[i] * vector[i];
+		const val = vector[i] ?? 0;
+		magnitude += val * val;
 	}
 
 	magnitude = Math.sqrt(magnitude);

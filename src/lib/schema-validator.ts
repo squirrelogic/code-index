@@ -52,7 +52,7 @@ export class SchemaValidator {
 				integrity_check: string;
 			}>;
 
-			const isValid = result.length === 1 && result[0].integrity_check === 'ok';
+			const isValid = result.length === 1 && result[0]?.integrity_check === 'ok';
 
 			return {
 				valid: isValid,
@@ -132,7 +132,7 @@ export class SchemaValidator {
 		const result = this.db.pragma('journal_mode') as Array<{
 			journal_mode: string;
 		}>;
-		return result.length > 0 && result[0].journal_mode.toLowerCase() === 'wal';
+		return result.length > 0 && result[0]?.journal_mode.toLowerCase() === 'wal';
 	}
 
 	/**
@@ -144,7 +144,7 @@ export class SchemaValidator {
 		const result = this.db.pragma('foreign_keys') as Array<{
 			foreign_keys: number;
 		}>;
-		return result.length > 0 && result[0].foreign_keys === 1;
+		return result.length > 0 && result[0]?.foreign_keys === 1;
 	}
 
 	/**
@@ -160,10 +160,10 @@ export class SchemaValidator {
 	} {
 		const pageCount = (
 			this.db.pragma('page_count') as Array<{ page_count: number }>
-		)[0].page_count;
+		)[0]?.page_count ?? 0;
 		const pageSize = (
 			this.db.pragma('page_size') as Array<{ page_size: number }>
-		)[0].page_size;
+		)[0]?.page_size ?? 0;
 		const sizeBytes = pageCount * pageSize;
 
 		return {

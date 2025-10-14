@@ -171,7 +171,7 @@ export class ChunkHashValidator {
     let expectedHash: string | null = null;
 
     if (isStable) {
-      expectedHash = allHashes[0];
+      expectedHash = allHashes[0] ?? null;
       details = `Hash is stable: all ${chunks.length} samples produced the same hash`;
     } else {
       details = `Hash is unstable: ${chunks.length} samples produced ${uniqueHashCount} different hashes`;

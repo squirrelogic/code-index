@@ -86,7 +86,9 @@ export function validateModelId(
 
       // Validate org and model names (alphanumeric, hyphens, underscores)
       const validPattern = /^[a-zA-Z0-9_-]+$/;
-      if (!validPattern.test(parts[0]) || !validPattern.test(parts[1])) {
+      const org = parts[0];
+      const model = parts[1];
+      if (!org || !model || !validPattern.test(org) || !validPattern.test(model)) {
         return {
           valid: false,
           error: 'Hugging Face model ID contains invalid characters (allowed: a-z, A-Z, 0-9, -, _)'

@@ -19,10 +19,10 @@ function normalizeContent(content: string): string {
 	const lines = content.split('\n');
 
 	// Remove leading and trailing empty lines
-	while (lines.length > 0 && lines[0].trim() === '') {
+	while (lines.length > 0 && lines[0]?.trim() === '') {
 		lines.shift();
 	}
-	while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+	while (lines.length > 0 && lines[lines.length - 1]?.trim() === '') {
 		lines.pop();
 	}
 
@@ -43,8 +43,9 @@ function normalizeContent(content: string): string {
 	// Remove minimum indentation from all lines (dedent)
 	if (minIndent !== Infinity && minIndent > 0) {
 		for (let i = 0; i < lines.length; i++) {
-			if (lines[i].length >= minIndent) {
-				lines[i] = lines[i].substring(minIndent);
+			const line = lines[i];
+			if (line && line.length >= minIndent) {
+				lines[i] = line.substring(minIndent);
 			}
 		}
 	}

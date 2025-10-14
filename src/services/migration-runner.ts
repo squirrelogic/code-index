@@ -44,7 +44,7 @@ export class MigrationRunner {
 			const sql = fs.readFileSync(path.join(this.migrationsDir, file), 'utf-8');
 
 			return {
-				version,
+				version: version ?? '',
 				description: descParts.join(' '),
 				sql,
 			};
@@ -117,11 +117,16 @@ export class MigrationRunner {
 		// Check for sequential versions (warn if gaps, but don't fail)
 		const sortedVersions = Array.from(versions).sort();
 		for (let i = 1; i < sortedVersions.length; i++) {
-			const prev = parseInt(sortedVersions[i - 1], 10);
-			const curr = parseInt(sortedVersions[i], 10);
+			const prevVersion = sortedVersions[i - 1];
+			const currVersion = sortedVersions[i];
+			if (!prevVersion || !currVersion) {
+				continue;
+			}
+			const prev = parseInt(prevVersion, 10);
+			const curr = parseInt(currVersion, 10);
 			if (curr !== prev + 1) {
 				console.warn(
-					`  ⚠️  Warning: Gap in migration versions between ${sortedVersions[i - 1]} and ${sortedVersions[i]}`
+					`  ⚠️  Warning: Gap in migration versions between ${prevVersion} and ${currVersion}`
 				);
 			}
 		}
@@ -147,9 +152,9 @@ export class MigrationRunner {
 			integrity_check: string;
 		}>;
 
-		if (result.length === 0 || result[0].integrity_check !== 'ok') {
+		if (result.length === 0 || result[0]?.integrity_check !== 'ok') {
 			const message =
-				result.length > 0 ? result[0].integrity_check : 'Unknown error';
+				result.length > 0 ? result[0]?.integrity_check ?? 'Unknown error' : 'Unknown error';
 			throw new Error(`Database integrity check failed: ${message}`);
 		}
 
