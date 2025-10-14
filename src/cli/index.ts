@@ -11,11 +11,21 @@ program
   .description('A CLI tool for local code indexing and search using SQLite')
   .version('1.0.0')
   .option('--json', 'Output results in JSON format')
+  .option('-v, --verbose', 'Enable verbose logging')
+  .option('-q, --quiet', 'Suppress non-error output')
   .hook('preAction', (thisCommand) => {
     // Set output format based on global --json flag
     const opts = thisCommand.opts();
     if (opts.json) {
       output.setFormat(OutputFormat.JSON);
+    }
+
+    // Handle verbose and quiet flags
+    if (opts.verbose) {
+      process.env.LOG_LEVEL = 'debug';
+    }
+    if (opts.quiet) {
+      process.env.LOG_LEVEL = 'error';
     }
   });
 

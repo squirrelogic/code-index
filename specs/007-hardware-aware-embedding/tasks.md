@@ -194,16 +194,16 @@
 
 **Purpose**: Integrate all functionality into CLI commands with proper output formatting and error handling
 
-- [ ] T084 [P] Add --files flag to embed command in src/cli/commands/embed.ts (filter to specific files, validate files exist)
-- [ ] T085 [P] Add --profile flag to embed command in src/cli/commands/embed.ts (temporary profile override without saving to config)
-- [ ] T086 [P] Add --json flag to embed command in src/cli/commands/embed.ts (output results as JSON per CLI contract with summary, hardware, model, fallbacks, failures)
-- [ ] T087 [P] Add --progress/--no-progress flags to embed command in src/cli/commands/embed.ts (control progress bar display)
-- [ ] T088 Update existing init command to integrate hardware detection (if init already exists, add hardware detection step)
-- [ ] T089 Implement human-readable output formatting for all commands (success messages with checkmarks, warning messages for fallbacks, error messages with context)
-- [ ] T090 Implement JSON output formatting for all commands with --json flag (structured output for automation per CLI contract)
-- [ ] T091 Add exit code handling for all commands per CLI contract specifications (0=success, 1-5=various error types)
-- [ ] T092 Add global --verbose flag support for detailed logging across all commands
-- [ ] T093 Add global --quiet flag support to suppress non-error output
+- [X] T084 [P] Add --files flag to embed command in src/cli/commands/embed.ts (filter to specific files, validate files exist)
+- [X] T085 [P] Add --profile flag to embed command in src/cli/commands/embed.ts (temporary profile override without saving to config)
+- [X] T086 [P] Add --json flag to embed command in src/cli/commands/embed.ts (output results as JSON per CLI contract with summary, hardware, model, fallbacks, failures)
+- [X] T087 [P] Add --progress/--no-progress flags to embed command in src/cli/commands/embed.ts (control progress bar display)
+- [X] T088 Update existing init command to integrate hardware detection (if init already exists, add hardware detection step)
+- [X] T089 Implement human-readable output formatting for all commands (success messages with checkmarks, warning messages for fallbacks, error messages with context)
+- [X] T090 Implement JSON output formatting for all commands with --json flag (structured output for automation per CLI contract)
+- [X] T091 Add exit code handling for all commands per CLI contract specifications (0=success, 1-5=various error types)
+- [X] T092 Add global --verbose flag support for detailed logging across all commands
+- [X] T093 Add global --quiet flag support to suppress non-error output
 
 ---
 
