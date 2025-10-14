@@ -19,17 +19,17 @@
 
 **Purpose**: Install dependencies and create basic project structure for embedding functionality
 
-- [ ] T001 Install @xenova/transformers@^2.17.0 dependency for embedding models
-- [ ] T002 [P] Install cli-progress@^3.12.0 for progress bars
-- [ ] T003 [P] Install ora@^8.0.0 for spinners during model loading
-- [ ] T004 [P] Install opossum@^8.1.0 for circuit breaker pattern
-- [ ] T005 [P] Install p-limit@^5.0.0 for concurrency control
-- [ ] T006 Create src/models/ directory structure for embedding data models
-- [ ] T007 [P] Create src/services/hardware/ directory for hardware detection
-- [ ] T008 [P] Create src/services/embedding/ directory for core embedding logic
-- [ ] T009 [P] Create src/services/cache/ directory for cache management
-- [ ] T010 [P] Create src/lib/embedding/backends/ directory for ONNX/PyTorch backends
-- [ ] T011 [P] Create src/lib/embedding/quantization/ directory for quantization utilities
+- [X] T001 Install @xenova/transformers@^2.17.0 dependency for embedding models
+- [X] T002 [P] Install cli-progress@^3.12.0 for progress bars
+- [X] T003 [P] Install ora@^8.0.0 for spinners during model loading
+- [X] T004 [P] Install opossum@^8.1.0 for circuit breaker pattern
+- [X] T005 [P] Install p-limit@^5.0.0 for concurrency control
+- [X] T006 Create src/models/ directory structure for embedding data models
+- [X] T007 [P] Create src/services/hardware/ directory for hardware detection
+- [X] T008 [P] Create src/services/embedding/ directory for core embedding logic
+- [X] T009 [P] Create src/services/cache/ directory for cache management
+- [X] T010 [P] Create src/lib/embedding/backends/ directory for ONNX/PyTorch backends
+- [X] T011 [P] Create src/lib/embedding/quantization/ directory for quantization utilities
 
 ---
 
@@ -39,17 +39,17 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T012 [P] Create HardwareCapabilities model in src/models/HardwareCapabilities.ts (cpuCores, totalRAM, freeRAM, platform, arch, cpuModel, gpu, detectedAt, onnxProviders)
-- [ ] T013 [P] Create GPUInfo model in src/models/GPUInfo.ts (vendor, name, memory, driverVersion, computeCapability, metalVersion)
-- [ ] T014 [P] Create EmbeddingProfile model in src/models/EmbeddingProfile.ts (name, model, modelVersion, backend, device, quantization, batchSize, dimensions, cacheDir) with preset profiles (light, balanced, performance)
-- [ ] T015 [P] Create EmbeddingConfig model in src/models/EmbeddingConfig.ts (version, profile, hardwareCapabilities, fallbackHistory, createdAt, updatedAt)
-- [ ] T016 [P] Create EmbeddingModel model in src/models/EmbeddingModel.ts (modelId, modelVersion, backend, device, quantization, dimensions, loadedAt, modelPath, pipeline)
-- [ ] T017 [P] Create EmbeddingCacheEntry model in src/models/EmbeddingCacheEntry.ts (id, contentHash, modelId, modelVersion, dimensions, embedding, createdAt, lastAccessedAt)
-- [ ] T018 [P] Create FallbackEvent model in src/models/FallbackEvent.ts (timestamp, level, action, from, to, reason, success)
-- [ ] T019 Implement ConfigService in src/services/config/ConfigService.ts (load/save .codeindex/config.json, validate configuration, handle version upgrades)
-- [ ] T020 Implement EmbeddingCache service in src/services/cache/EmbeddingCache.ts (SQLite operations: create embeddings table, insert/update/query cache, invalidate by dimension/model, handle binary blob storage)
-- [ ] T021 Setup SQLite schema for embeddings cache in src/services/cache/EmbeddingCache.ts (CREATE TABLE embeddings with indexes on contentHash+modelId+modelVersion+dimensions, lastAccessedAt, modelId+dimensions)
-- [ ] T022 Configure Transformers.js environment in src/lib/embedding/EmbeddingEnv.ts (set cacheDir to .codeindex/models, configure offline behavior, set allowLocalModels)
+- [X] T012 [P] Create HardwareCapabilities model in src/models/HardwareCapabilities.ts (cpuCores, totalRAM, freeRAM, platform, arch, cpuModel, gpu, detectedAt, onnxProviders)
+- [X] T013 [P] Create GPUInfo model in src/models/GPUInfo.ts (vendor, name, memory, driverVersion, computeCapability, metalVersion)
+- [X] T014 [P] Create EmbeddingProfile model in src/models/EmbeddingProfile.ts (name, model, modelVersion, backend, device, quantization, batchSize, dimensions, cacheDir) with preset profiles (light, balanced, performance)
+- [X] T015 [P] Create EmbeddingConfig model in src/models/EmbeddingConfig.ts (version, profile, hardwareCapabilities, fallbackHistory, createdAt, updatedAt)
+- [X] T016 [P] Create EmbeddingModel model in src/models/EmbeddingModel.ts (modelId, modelVersion, backend, device, quantization, dimensions, loadedAt, modelPath, pipeline)
+- [X] T017 [P] Create EmbeddingCacheEntry model in src/models/EmbeddingCacheEntry.ts (id, contentHash, modelId, modelVersion, dimensions, embedding, createdAt, lastAccessedAt)
+- [X] T018 [P] Create FallbackEvent model in src/models/FallbackEvent.ts (timestamp, level, action, from, to, reason, success)
+- [X] T019 Implement ConfigService in src/services/config/ConfigService.ts (load/save .codeindex/config.json, validate configuration, handle version upgrades)
+- [X] T020 Implement EmbeddingCache service in src/services/cache/EmbeddingCache.ts (SQLite operations: create embeddings table, insert/update/query cache, invalidate by dimension/model, handle binary blob storage)
+- [X] T021 Setup SQLite schema for embeddings cache in src/services/cache/EmbeddingCache.ts (CREATE TABLE embeddings with indexes on contentHash+modelId+modelVersion+dimensions, lastAccessedAt, modelId+dimensions)
+- [X] T022 Configure Transformers.js environment in src/lib/embedding/EmbeddingEnv.ts (set cacheDir to .codeindex/models, configure offline behavior, set allowLocalModels)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
