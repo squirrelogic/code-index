@@ -93,7 +93,7 @@ export class QueryAnalyzer {
 				usesIndex = true;
 				// Extract index name
 				const indexMatch = detail.match(/using index (\w+)/);
-				if (indexMatch) {
+				if (indexMatch && indexMatch[1]) {
 					indexesUsed.push(indexMatch[1]);
 				}
 			}

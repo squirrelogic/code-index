@@ -24,7 +24,7 @@ export class EmbeddingRepository {
 	private getAllStmt: Database.Statement;
 	private deleteByChunkStmt: Database.Statement;
 
-	constructor(private db: Database.Database) {
+	constructor(db: Database.Database) {
 		// Prepare all statements once for performance
 		this.insertStmt = db.prepare(`
 			INSERT INTO embeddings (chunk_id, embedding, model, created_at)

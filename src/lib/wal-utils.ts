@@ -68,7 +68,7 @@ export function walCheckpoint(
 			checkpointed: number;
 		}>;
 
-		if (result.length === 0) {
+		if (result.length === 0 || !result[0]) {
 			throw new Error('WAL checkpoint returned no results');
 		}
 
@@ -113,18 +113,18 @@ export function walCheckpoint(
 export function getWALInfo(db: Database.Database): WALInfo {
 	// Check if WAL mode is enabled
 	const journalMode = db.pragma('journal_mode') as Array<{ journal_mode: string }>;
-	const walMode = journalMode.length > 0 && journalMode[0].journal_mode === 'wal';
+	const walMode = journalMode.length > 0 && journalMode[0]?.journal_mode === 'wal';
 
 	// Get checkpoint threshold
 	const walAutocheckpoint = db.pragma('wal_autocheckpoint') as Array<{
 		wal_autocheckpoint: number;
 	}>;
 	const checkpointThreshold =
-		walAutocheckpoint.length > 0 ? walAutocheckpoint[0].wal_autocheckpoint : 1000;
+		walAutocheckpoint.length > 0 ? walAutocheckpoint[0]?.wal_autocheckpoint ?? 1000 : 1000;
 
 	// Get page size for size calculations
 	const pageSize = (db.pragma('page_size') as Array<{ page_size: number }>)[0]
-		.page_size;
+		?.page_size ?? 4096;
 
 	// Check WAL size (approximation)
 	// Note: SQLite doesn't provide direct WAL size query, so we estimate
@@ -212,7 +212,7 @@ export function enableWALMode(db: Database.Database): boolean {
 			journal_mode: string;
 		}>;
 
-		const success = result.length > 0 && result[0].journal_mode === 'wal';
+		const success = result.length > 0 && result[0]?.journal_mode === 'wal';
 
 		if (success) {
 			logger.info('WAL mode enabled successfully');
@@ -265,7 +265,7 @@ export function disableWALMode(db: Database.Database): boolean {
 			journal_mode: string;
 		}>;
 
-		const success = result.length > 0 && result[0].journal_mode === 'delete';
+		const success = result.length > 0 && result[0]?.journal_mode === 'delete';
 
 		if (success) {
 			logger.info('WAL mode disabled successfully');

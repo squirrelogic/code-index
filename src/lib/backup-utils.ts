@@ -130,6 +130,9 @@ export class BackupManager {
 			}
 
 			const [, basename, timestampStr] = match;
+			if (!timestampStr) {
+				continue;
+			}
 			const timestamp = new Date(timestampStr.replace(/_/g, 'T').replace(/-/g, ':'));
 
 			const backupInfo: BackupInfo = {
@@ -220,7 +223,7 @@ export class BackupManager {
 				integrity_check: string;
 			}>;
 
-			if (result.length === 0 || result[0].integrity_check !== 'ok') {
+			if (result.length === 0 || result[0]?.integrity_check !== 'ok') {
 				throw new Error('Restored database failed integrity check');
 			}
 
@@ -246,8 +249,8 @@ export class BackupManager {
 		return {
 			totalBackups: backups.length,
 			totalSizeBytes: backups.reduce((sum, b) => sum + b.sizeBytes, 0),
-			oldestBackup: backups.length > 0 ? backups[backups.length - 1].timestamp : null,
-			newestBackup: backups.length > 0 ? backups[0].timestamp : null,
+			oldestBackup: backups.length > 0 ? backups[backups.length - 1]?.timestamp ?? null : null,
+			newestBackup: backups.length > 0 ? backups[0]?.timestamp ?? null : null,
 		};
 	}
 }

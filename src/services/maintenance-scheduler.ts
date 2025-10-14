@@ -289,9 +289,9 @@ export class MaintenanceScheduler {
 	private getDatabaseSize(): { sizeBytes: number; sizeMB: number } {
 		const pageCount = (
 			this.db.pragma('page_count') as Array<{ page_count: number }>
-		)[0].page_count;
+		)[0]?.page_count ?? 0;
 		const pageSize = (this.db.pragma('page_size') as Array<{ page_size: number }>)[0]
-			.page_size;
+			?.page_size ?? 0;
 		const sizeBytes = pageCount * pageSize;
 
 		return {

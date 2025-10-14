@@ -11,11 +11,21 @@ program
   .description('A CLI tool for local code indexing and search using SQLite')
   .version('1.0.0')
   .option('--json', 'Output results in JSON format')
+  .option('-v, --verbose', 'Enable verbose logging')
+  .option('-q, --quiet', 'Suppress non-error output')
   .hook('preAction', (thisCommand) => {
     // Set output format based on global --json flag
     const opts = thisCommand.opts();
     if (opts.json) {
       output.setFormat(OutputFormat.JSON);
+    }
+
+    // Handle verbose and quiet flags
+    if (opts.verbose) {
+      process.env.LOG_LEVEL = 'debug';
+    }
+    if (opts.quiet) {
+      process.env.LOG_LEVEL = 'error';
     }
   });
 
@@ -41,6 +51,8 @@ import { createUninstallCommand } from './commands/uninstall.js';
 import { createWatchCommand } from './commands/watch.js';
 import { createHooksCommand } from './commands/hooks.js';
 import { createDiagnoseCommand } from './commands/diagnose.js';
+import { createEmbedCommand } from './commands/embed.js';
+import { createConfigCommand } from './commands/config.js';
 
 // Register commands
 program.addCommand(createInitCommand());
@@ -52,6 +64,8 @@ program.addCommand(createUninstallCommand());
 program.addCommand(createWatchCommand());
 program.addCommand(createHooksCommand());
 program.addCommand(createDiagnoseCommand());
+program.addCommand(createEmbedCommand());
+program.addCommand(createConfigCommand());
 
 // Parse arguments
 try {

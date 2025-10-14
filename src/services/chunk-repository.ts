@@ -17,7 +17,7 @@ export class ChunkRepository {
 	private findBySymbolStmt: Database.Statement;
 	private softDeleteStmt: Database.Statement;
 
-	constructor(private db: Database.Database) {
+	constructor(db: Database.Database) {
 		// Prepare all statements once for performance
 		this.insertStmt = db.prepare(`
 			INSERT INTO chunks (
