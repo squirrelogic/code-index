@@ -63,18 +63,18 @@
 
 ### Implementation for User Story 1
 
-- [ ] T023 [P] [US1] Implement HardwareDetector service in src/services/hardware/HardwareDetector.ts (detect CPU cores/model, total/free RAM, platform/arch using Node.js os module)
-- [ ] T024 [P] [US1] Implement GPU detection for NVIDIA in src/services/hardware/HardwareDetector.ts (parse nvidia-smi output for GPU name, memory, driver version, compute capability)
-- [ ] T025 [P] [US1] Implement GPU detection for Apple Silicon in src/services/hardware/HardwareDetector.ts (parse system_profiler output for Metal version, unified memory)
-- [ ] T026 [P] [US1] Implement ONNX Runtime provider detection in src/services/hardware/HardwareDetector.ts (check available execution providers: CPU, CUDA, CoreML, DirectML)
-- [ ] T027 [US1] Implement CapabilityEvaluator service in src/services/hardware/CapabilityEvaluator.ts (evaluate which profiles are supported, calculate recommended batch sizes, validate device compatibility)
-- [ ] T028 [US1] Implement ProfileManager service in src/services/embedding/ProfileManager.ts (auto-select profile based on hardware: CPU→light+int8, MPS→balanced+fp16, CUDA→performance+fp16)
-- [ ] T029 [US1] Integrate hardware detection into init command in src/cli/commands/init.ts (run hardware detection, select profile, persist config to .codeindex/config.json, display results)
-- [ ] T030 [US1] Implement ModelLoader service in src/services/embedding/ModelLoader.ts (singleton lazy loading pattern, download models from Hugging Face, cache locally, handle progress callbacks)
-- [ ] T031 [US1] Implement EmbeddingService orchestration in src/services/embedding/EmbeddingService.ts (coordinate hardware detection, profile selection, model loading, batch processing)
-- [ ] T032 [US1] Implement embed command in src/cli/commands/embed.ts (load config, initialize EmbeddingService, process files in batches, cache results, display progress with cli-progress)
-- [ ] T033 [US1] Add validation and error handling for hardware detection failures (graceful degradation to CPU-only if detection fails)
-- [ ] T034 [US1] Add logging for hardware detection and profile selection using existing logger
+- [X] T023 [P] [US1] Implement HardwareDetector service in src/services/hardware/HardwareDetector.ts (detect CPU cores/model, total/free RAM, platform/arch using Node.js os module)
+- [X] T024 [P] [US1] Implement GPU detection for NVIDIA in src/services/hardware/HardwareDetector.ts (parse nvidia-smi output for GPU name, memory, driver version, compute capability)
+- [X] T025 [P] [US1] Implement GPU detection for Apple Silicon in src/services/hardware/HardwareDetector.ts (parse system_profiler output for Metal version, unified memory)
+- [X] T026 [P] [US1] Implement ONNX Runtime provider detection in src/services/hardware/HardwareDetector.ts (check available execution providers: CPU, CUDA, CoreML, DirectML)
+- [X] T027 [US1] Implement CapabilityEvaluator service in src/services/hardware/CapabilityEvaluator.ts (evaluate which profiles are supported, calculate recommended batch sizes, validate device compatibility)
+- [X] T028 [US1] Implement ProfileManager service in src/services/embedding/ProfileManager.ts (auto-select profile based on hardware: CPU→light+int8, MPS→balanced+fp16, CUDA→performance+fp16)
+- [X] T029 [US1] Integrate hardware detection into init command in src/cli/commands/init.ts (run hardware detection, select profile, persist config to .codeindex/config.json, display results)
+- [X] T030 [US1] Implement ModelLoader service in src/services/embedding/ModelLoader.ts (singleton lazy loading pattern, download models from Hugging Face, cache locally, handle progress callbacks)
+- [X] T031 [US1] Implement EmbeddingService orchestration in src/services/embedding/EmbeddingService.ts (coordinate hardware detection, profile selection, model loading, batch processing)
+- [X] T032 [US1] Implement embed command in src/cli/commands/embed.ts (load config, initialize EmbeddingService, process files in batches, cache results, display progress with cli-progress)
+- [X] T033 [US1] Add validation and error handling for hardware detection failures (graceful degradation to CPU-only if detection fails)
+- [X] T034 [US1] Add logging for hardware detection and profile selection using existing logger
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - tool auto-detects hardware and generates embeddings on all platforms
 
@@ -90,17 +90,17 @@
 
 ### Implementation for User Story 4
 
-- [ ] T035 [P] [US4] Implement FallbackChain service in src/services/embedding/FallbackChain.ts (define fallback chain: reduce_batch → switch_device → switch_model → switch_quantization)
-- [ ] T036 [US4] Implement batch size reduction fallback in src/services/embedding/FallbackChain.ts (detect OOM errors, reduce batch size by 50%, retry with minimum batch size of 1)
-- [ ] T037 [US4] Implement device switching fallback in src/services/embedding/FallbackChain.ts (detect GPU unavailable errors, switch CUDA→CPU or MPS→CPU, reset pipeline)
-- [ ] T038 [US4] Implement model switching fallback in src/services/embedding/FallbackChain.ts (detect model load failures, switch to lighter model, warn about cache invalidation)
-- [ ] T039 [US4] Implement quantization switching fallback in src/services/embedding/FallbackChain.ts (switch to int8 quantization on memory constraints)
-- [ ] T040 [US4] Integrate circuit breaker pattern in src/services/embedding/EmbeddingService.ts using opossum (timeout 30s, error threshold 50%, reset timeout 60s, fallback to cache)
-- [ ] T041 [US4] Implement fallback event logging in src/services/embedding/FallbackChain.ts (log to .codeindex/logs/embedding.jsonl in JSON Lines format with timestamp, action, from/to config, reason, success)
-- [ ] T042 [US4] Store fallback history in EmbeddingConfig (last 10 events in config.json)
-- [ ] T043 [US4] Add retry logic for model downloads in src/services/embedding/ModelLoader.ts (3 retries with exponential backoff, only retry network errors)
-- [ ] T044 [US4] Update embed command to handle fallback chains gracefully (continue processing, display fallback warnings, log all actions, never fail completely if fallback exists)
-- [ ] T045 [US4] Add memory-adaptive batch processing in src/services/embedding/EmbeddingService.ts (monitor heap usage, auto-reduce batch size at 80% memory pressure)
+- [X] T035 [P] [US4] Implement FallbackChain service in src/services/embedding/FallbackChain.ts (define fallback chain: reduce_batch → switch_device → switch_model → switch_quantization)
+- [X] T036 [US4] Implement batch size reduction fallback in src/services/embedding/FallbackChain.ts (detect OOM errors, reduce batch size by 50%, retry with minimum batch size of 1)
+- [X] T037 [US4] Implement device switching fallback in src/services/embedding/FallbackChain.ts (detect GPU unavailable errors, switch CUDA→CPU or MPS→CPU, reset pipeline)
+- [X] T038 [US4] Implement model switching fallback in src/services/embedding/FallbackChain.ts (detect model load failures, switch to lighter model, warn about cache invalidation)
+- [X] T039 [US4] Implement quantization switching fallback in src/services/embedding/FallbackChain.ts (switch to int8 quantization on memory constraints)
+- [X] T040 [US4] Integrate circuit breaker pattern in src/services/embedding/EmbeddingService.ts using opossum (timeout 30s, error threshold 50%, reset timeout 60s, fallback to cache)
+- [X] T041 [US4] Implement fallback event logging in src/services/embedding/FallbackChain.ts (log to .codeindex/logs/embedding.jsonl in JSON Lines format with timestamp, action, from/to config, reason, success)
+- [X] T042 [US4] Store fallback history in EmbeddingConfig (last 10 events in config.json)
+- [X] T043 [US4] Add retry logic for model downloads in src/services/embedding/ModelLoader.ts (3 retries with exponential backoff, only retry network errors)
+- [X] T044 [US4] Update embed command to handle fallback chains gracefully (continue processing, display fallback warnings, log all actions, never fail completely if fallback exists)
+- [X] T045 [US4] Add memory-adaptive batch processing in src/services/embedding/EmbeddingService.ts (monitor heap usage, auto-reduce batch size at 80% memory pressure)
 
 **Checkpoint**: System should now handle resource constraints gracefully and never fail completely when fallback options exist
 

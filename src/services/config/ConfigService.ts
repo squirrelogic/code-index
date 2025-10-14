@@ -162,6 +162,41 @@ export class ConfigService {
   }
 
   /**
+   * Update fallback history in configuration
+   * Keeps only the last N events (default 10)
+   *
+   * @param config - Current configuration
+   * @param newEvents - New fallback events to add
+   * @param maxEvents - Maximum events to keep (default 10)
+   */
+  async updateFallbackHistory(
+    config: EmbeddingConfig,
+    newEvents: import('../../models/FallbackEvent.js').FallbackEvent[],
+    maxEvents: number = 10
+  ): Promise<void> {
+    // Add new events to history
+    config.fallbackHistory.push(...newEvents);
+
+    // Keep only the last N events
+    if (config.fallbackHistory.length > maxEvents) {
+      config.fallbackHistory = config.fallbackHistory.slice(-maxEvents);
+    }
+
+    // Save updated config
+    await this.save(config);
+  }
+
+  /**
+   * Clear fallback history
+   *
+   * @param config - Current configuration
+   */
+  async clearFallbackHistory(config: EmbeddingConfig): Promise<void> {
+    config.fallbackHistory = [];
+    await this.save(config);
+  }
+
+  /**
    * Selects appropriate profile based on hardware
    */
   private selectProfileForHardware(hardware: HardwareCapabilities): string {
