@@ -6,6 +6,9 @@
 
 import { GPUInfo } from './GPUInfo.js';
 
+// Re-export GPUInfo for convenience
+export type { GPUInfo };
+
 export type Platform = 'darwin' | 'linux' | 'win32';
 export type Architecture = 'x64' | 'arm64';
 

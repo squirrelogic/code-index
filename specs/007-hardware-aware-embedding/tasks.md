@@ -114,17 +114,17 @@
 
 ### Implementation for User Story 2
 
-- [ ] T046 [P] [US2] Implement config set embedding.profile command in src/cli/commands/config.ts (validate profile exists, warn if hardware incompatible, detect dimension changes, save to config)
-- [ ] T047 [P] [US2] Implement config set embedding.model command in src/cli/commands/config.ts (validate model ID or local path, detect model dimensions, warn if dimension changes, support --version flag)
-- [ ] T048 [P] [US2] Implement config set embedding.backend command in src/cli/commands/config.ts (validate backend is onnx or pytorch, check backend available, save to config)
-- [ ] T049 [P] [US2] Implement config set embedding.quantization command in src/cli/commands/config.ts (validate quantization level, check compatibility with backend+device, save to config)
-- [ ] T050 [P] [US2] Implement config set embedding.batchSize command in src/cli/commands/config.ts (validate range 1-256, save to config)
-- [ ] T051 [P] [US2] Implement config set embedding.cacheDir command in src/cli/commands/config.ts (validate path, create directory if needed, check writable, save to config, note about not moving existing cache)
-- [ ] T052 [US2] Implement --rebuild flag for embed command in src/cli/commands/embed.ts (clear all cache entries, regenerate all embeddings)
-- [ ] T053 [US2] Implement dimension change detection in src/services/config/ConfigService.ts (compare new vs current dimensions, warn user, trigger cache invalidation)
-- [ ] T054 [US2] Implement cache invalidation on dimension change in src/services/cache/EmbeddingCache.ts (DELETE FROM embeddings WHERE dimensions = old_dimension)
-- [ ] T055 [US2] Add configuration validation in src/services/config/ConfigService.ts (validate all config fields, check hardware compatibility, verify model exists)
-- [ ] T056 [US2] Add exit codes for all config commands per CLI contract (0=success, 1=invalid value, 2=not writable, 3=incompatible)
+- [X] T046 [P] [US2] Implement config set embedding.profile command in src/cli/commands/config.ts (validate profile exists, warn if hardware incompatible, detect dimension changes, save to config)
+- [X] T047 [P] [US2] Implement config set embedding.model command in src/cli/commands/config.ts (validate model ID or local path, detect model dimensions, warn if dimension changes, support --version flag)
+- [X] T048 [P] [US2] Implement config set embedding.backend command in src/cli/commands/config.ts (validate backend is onnx or pytorch, check backend available, save to config)
+- [X] T049 [P] [US2] Implement config set embedding.quantization command in src/cli/commands/config.ts (validate quantization level, check compatibility with backend+device, save to config)
+- [X] T050 [P] [US2] Implement config set embedding.batchSize command in src/cli/commands/config.ts (validate range 1-256, save to config)
+- [X] T051 [P] [US2] Implement config set embedding.cacheDir command in src/cli/commands/config.ts (validate path, create directory if needed, check writable, save to config, note about not moving existing cache)
+- [X] T052 [US2] Implement --rebuild flag for embed command in src/cli/commands/embed.ts (clear all cache entries, regenerate all embeddings)
+- [X] T053 [US2] Implement dimension change detection in src/services/config/ConfigService.ts (compare new vs current dimensions, warn user, trigger cache invalidation)
+- [X] T054 [US2] Implement cache invalidation on dimension change in src/services/cache/EmbeddingCache.ts (DELETE FROM embeddings WHERE dimensions = old_dimension)
+- [X] T055 [US2] Add configuration validation in src/services/config/ConfigService.ts (validate all config fields, check hardware compatibility, verify model exists)
+- [X] T056 [US2] Add exit codes for all config commands per CLI contract (0=success, 1=invalid value, 2=not writable, 3=incompatible)
 
 **Checkpoint**: Configuration management should be fully functional - users can customize all settings via CLI
 

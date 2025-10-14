@@ -8,6 +8,9 @@ import { Logger } from '../utils/logger.js';
 import { OutputFormatter } from '../utils/output.js';
 import type { ProjectConfiguration } from '../../models/project-config.js';
 import { DEFAULT_PROJECT_CONFIG } from '../../models/project-config.js';
+import { HardwareDetector } from '../../services/hardware/HardwareDetector.js';
+import { ProfileManager } from '../../services/embedding/ProfileManager.js';
+import type { EmbeddingConfig } from '../../models/EmbeddingConfig.js';
 
 interface InitOptions {
   force?: boolean;
@@ -57,6 +60,20 @@ interface InitResult {
   directoriesCreated: string[];
   filesCreated: string[];
   alreadyExisted: string[];
+  hardware?: {
+    cpu: string;
+    cores: number;
+    ram: string;
+    gpu?: string;
+  };
+  profile?: {
+    name: string;
+    model: string;
+    dimensions: number;
+    device: string;
+    quantization: string;
+    batchSize: number;
+  };
   error?: Error;
 }
 
@@ -138,6 +155,36 @@ async function initializeProject(
   db.close();
 
   output.info('Database initialized', { path: join(codeIndexDir, 'index.db') });
+
+  // Detect hardware and configure embedding profile
+  try {
+    logger.info('Starting hardware detection and embedding configuration');
+    const hardwareResult = await detectHardwareAndConfigureEmbedding(
+      projectRoot,
+      codeIndexDir,
+      output,
+      logger
+    );
+    result.hardware = hardwareResult.hardware;
+    result.profile = hardwareResult.profile;
+    logger.info('Hardware detection and configuration complete', {
+      hardware: hardwareResult.hardware,
+      profile: hardwareResult.profile
+    });
+  } catch (error) {
+    logger.error('Hardware detection failed, using default configuration', { error });
+    output.warning('Hardware detection failed - using CPU-only configuration');
+
+    // Create fallback configuration
+    try {
+      const fallbackConfig = await createFallbackConfiguration(codeIndexDir, logger);
+      result.hardware = fallbackConfig.hardware;
+      result.profile = fallbackConfig.profile;
+      logger.info('Fallback configuration created successfully');
+    } catch (fallbackError) {
+      logger.error('Failed to create fallback configuration', { error: fallbackError });
+    }
+  }
 
   // Create .claude directory structure
   if (!existsSync(claudeDir)) {
@@ -256,4 +303,181 @@ function updateGitignore(gitignorePath: string, output: OutputFormatter): void {
     writeFileSync(gitignorePath, gitignoreContent);
     output.info('Updated .gitignore');
   }
+}
+
+/**
+ * Detect hardware capabilities and configure embedding profile
+ */
+async function detectHardwareAndConfigureEmbedding(
+  _projectRoot: string,
+  codeIndexDir: string,
+  output: OutputFormatter,
+  logger: Logger
+): Promise<{
+  hardware: {
+    cpu: string;
+    cores: number;
+    ram: string;
+    gpu?: string;
+  };
+  profile: {
+    name: string;
+    model: string;
+    dimensions: number;
+    device: string;
+    quantization: string;
+    batchSize: number;
+  };
+}> {
+  logger.info('Starting hardware detection');
+  output.info('Detecting hardware capabilities...');
+
+  // Detect hardware
+  const hardwareDetector = new HardwareDetector();
+  logger.debug('Hardware detector initialized');
+
+  const capabilities = await hardwareDetector.detect();
+  logger.info('Hardware detection complete', {
+    cpuCores: capabilities.cpuCores,
+    totalRAMGB: (capabilities.totalRAM / (1024 * 1024 * 1024)).toFixed(2),
+    platform: capabilities.platform,
+    arch: capabilities.arch,
+    hasGPU: !!capabilities.gpu,
+    gpuVendor: capabilities.gpu?.vendor,
+    onnxProviders: capabilities.onnxProviders
+  });
+
+  // Format hardware info for display
+  const ramGB = (capabilities.totalRAM / (1024 * 1024 * 1024)).toFixed(1);
+  const hardwareInfo = {
+    cpu: capabilities.cpuModel,
+    cores: capabilities.cpuCores,
+    ram: `${ramGB} GB`,
+    gpu: capabilities.gpu
+      ? `${capabilities.gpu.vendor} ${capabilities.gpu.name}`
+      : undefined
+  };
+
+  // Display hardware summary
+  output.success('Hardware detected', {
+    cpu: `${hardwareInfo.cpu} (${hardwareInfo.cores} cores)`,
+    ram: hardwareInfo.ram,
+    gpu: hardwareInfo.gpu || 'None'
+  });
+
+  // Select optimal embedding profile
+  logger.info('Selecting optimal embedding profile');
+  const profileManager = new ProfileManager();
+  const selectedProfile = profileManager.selectProfile(capabilities);
+
+  logger.info('Profile selection complete', {
+    profileName: selectedProfile.name,
+    model: selectedProfile.model,
+    device: selectedProfile.device,
+    quantization: selectedProfile.quantization,
+    batchSize: selectedProfile.batchSize,
+    dimensions: selectedProfile.dimensions
+  });
+
+  // Display profile summary
+  output.success(`Selected profile: ${selectedProfile.name}`, {
+    model: selectedProfile.model,
+    dimensions: `${selectedProfile.dimensions}d`,
+    device: selectedProfile.device,
+    quantization: selectedProfile.quantization,
+    batch_size: selectedProfile.batchSize
+  });
+
+  // Create embedding configuration
+  const embeddingConfig: EmbeddingConfig = {
+    version: '1.0.0',
+    profile: selectedProfile,
+    hardwareCapabilities: capabilities,
+    fallbackHistory: [],
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+
+  // Save configuration to .codeindex/config.json
+  const configPath = join(codeIndexDir, 'config.json');
+  writeFileSync(configPath, JSON.stringify(embeddingConfig, null, 2));
+  logger.info('Configuration saved', { path: configPath });
+
+  return {
+    hardware: hardwareInfo,
+    profile: {
+      name: selectedProfile.name,
+      model: selectedProfile.model,
+      dimensions: selectedProfile.dimensions,
+      device: selectedProfile.device,
+      quantization: selectedProfile.quantization,
+      batchSize: selectedProfile.batchSize
+    }
+  };
+}
+
+/**
+ * Create fallback configuration when hardware detection fails
+ */
+async function createFallbackConfiguration(
+  codeIndexDir: string,
+  logger: Logger
+): Promise<{
+  hardware: {
+    cpu: string;
+    cores: number;
+    ram: string;
+    gpu?: string;
+  };
+  profile: {
+    name: string;
+    model: string;
+    dimensions: number;
+    device: string;
+    quantization: string;
+    batchSize: number;
+  };
+}> {
+  logger.info('Creating fallback configuration (CPU-only, light profile)');
+
+  const hardwareDetector = new HardwareDetector();
+  const capabilities = await hardwareDetector.detect(); // Uses safe defaults
+
+  const profileManager = new ProfileManager();
+
+  // Force light profile for fallback
+  const lightProfile = profileManager.getProfile('light', capabilities);
+  if (!lightProfile) {
+    throw new Error('Failed to load light profile');
+  }
+
+  const embeddingConfig: EmbeddingConfig = {
+    version: '1.0.0',
+    profile: lightProfile,
+    hardwareCapabilities: capabilities,
+    fallbackHistory: [],
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+
+  const configPath = join(codeIndexDir, 'config.json');
+  writeFileSync(configPath, JSON.stringify(embeddingConfig, null, 2));
+  logger.info('Fallback configuration saved', { path: configPath });
+
+  return {
+    hardware: {
+      cpu: 'Unknown CPU',
+      cores: 2,
+      ram: '4 GB',
+      gpu: undefined
+    },
+    profile: {
+      name: lightProfile.name,
+      model: lightProfile.model,
+      dimensions: lightProfile.dimensions,
+      device: lightProfile.device,
+      quantization: lightProfile.quantization,
+      batchSize: lightProfile.batchSize
+    }
+  };
 }

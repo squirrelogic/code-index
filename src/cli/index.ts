@@ -41,6 +41,8 @@ import { createUninstallCommand } from './commands/uninstall.js';
 import { createWatchCommand } from './commands/watch.js';
 import { createHooksCommand } from './commands/hooks.js';
 import { createDiagnoseCommand } from './commands/diagnose.js';
+import { createEmbedCommand } from './commands/embed.js';
+import { createConfigCommand } from './commands/config.js';
 
 // Register commands
 program.addCommand(createInitCommand());
@@ -52,6 +54,8 @@ program.addCommand(createUninstallCommand());
 program.addCommand(createWatchCommand());
 program.addCommand(createHooksCommand());
 program.addCommand(createDiagnoseCommand());
+program.addCommand(createEmbedCommand());
+program.addCommand(createConfigCommand());
 
 // Parse arguments
 try {
