@@ -3,8 +3,8 @@
  * Used in testing and production monitoring
  */
 
-import { Chunk } from '../../models/Chunk';
-import { ChunkHasher } from '../../services/chunker/ChunkHasher';
+import { Chunk } from '../../models/Chunk.js';
+import { ChunkHasher } from '../../services/chunker/ChunkHasher.js';
 
 /**
  * Comparison result for chunk hash validation

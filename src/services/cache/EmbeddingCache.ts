@@ -8,7 +8,6 @@ import Database from 'better-sqlite3';
 import { promises as fs } from 'fs';
 import { dirname } from 'path';
 import {
-  EmbeddingCacheEntry,
   encodeEmbedding,
   decodeEmbedding
 } from '../../models/EmbeddingCacheEntry.js';

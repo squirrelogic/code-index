@@ -3,7 +3,7 @@
  */
 
 import { resolve, isAbsolute, normalize } from 'path';
-import { INPUT_LIMITS, BATCH_CONFIG, MODEL_CONFIG } from '../constants/embedding-constants.js';
+import { INPUT_LIMITS, BATCH_CONFIG } from '../constants/embedding-constants.js';
 
 /**
  * Validates a model ID to prevent path traversal attacks

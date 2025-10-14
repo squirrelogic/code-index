@@ -76,7 +76,7 @@ export function validateQuantizationCompatibility(
   }
 
   // Check if quantization is in the compatible list
-  if (!compatibleQuants.includes(quantization)) {
+  if (!(compatibleQuants as readonly string[]).includes(quantization)) {
     return {
       compatible: false,
       reason: `${quantization} quantization is not compatible with ${backend} backend on ${device} device. Compatible options: ${compatibleQuants.join(', ')}`
@@ -114,7 +114,8 @@ export function getCompatibleQuantizations(
     )) as Quantization[];
   }
 
-  return (QUANTIZATION_COMPATIBILITY[backend]?.[device] || []) as Quantization[];
+  const compatList = QUANTIZATION_COMPATIBILITY[backend]?.[device];
+  return compatList ? [...compatList] as Quantization[] : [];
 }
 
 /**

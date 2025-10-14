@@ -49,12 +49,15 @@ export class ONNXBackend {
     env.allowLocalModels = true;
 
     // Configure execution providers based on device
-    const providers = this.getExecutionProviders();
+    // Note: providers list is for future ONNX Runtime configuration
+    // Currently Transformers.js handles provider selection automatically
+    this.getExecutionProviders();
 
     // Configure quantization
     const quantized = this.shouldUseQuantization();
 
     // Load the pipeline
+    // Note: Transformers.js pipeline returns FeatureExtractionPipeline which is compatible with Pipeline
     this.pipeline = await pipeline(
       'feature-extraction',
       this.config.modelId,
@@ -62,10 +65,10 @@ export class ONNXBackend {
         revision: this.config.modelVersion,
         quantized,
         progress_callback: this.config.progressCallback,
-        // ONNX-specific configuration
-        device: this.mapDeviceToONNX(this.config.device),
+        // Note: device configuration is not directly supported by Transformers.js
+        // The library automatically selects optimal device based on availability
       }
-    );
+    ) as any; // Type assertion needed due to Transformers.js type limitations
   }
 
   /**
@@ -136,21 +139,6 @@ export class ONNXBackend {
     // For ONNX, quantization is enabled for int8, int4
     // fp16 and fp32 use the default model precision
     return quant === 'int8' || quant === 'int4';
-  }
-
-  /**
-   * Map device type to ONNX Runtime device string
-   */
-  private mapDeviceToONNX(device: Device): string {
-    switch (device) {
-      case 'cuda':
-        return 'gpu';
-      case 'mps':
-        return 'gpu'; // CoreML provider will be used
-      case 'cpu':
-      default:
-        return 'cpu';
-    }
   }
 
   /**

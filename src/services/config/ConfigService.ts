@@ -13,8 +13,9 @@ import {
   deserializeEmbeddingConfig,
   validateEmbeddingConfig
 } from '../../models/EmbeddingConfig.js';
-import { PRESET_PROFILES } from '../../models/EmbeddingProfile.js';
+import { PRESET_PROFILES, EmbeddingProfile } from '../../models/EmbeddingProfile.js';
 import { HardwareCapabilities } from '../../models/HardwareCapabilities.js';
+import type { FallbackEvent } from '../../models/FallbackEvent.js';
 
 export class ConfigService {
   private configPath: string;
@@ -172,7 +173,7 @@ export class ConfigService {
    */
   async updateFallbackHistory(
     config: EmbeddingConfig,
-    newEvents: import('../../models/FallbackEvent.js').FallbackEvent[],
+    newEvents: FallbackEvent[],
     maxEvents: number = 10
   ): Promise<void> {
     // Add new events to history
@@ -202,7 +203,7 @@ export class ConfigService {
    * @param config - Current configuration
    * @param profile - Custom profile to add
    */
-  async addCustomProfile(config: EmbeddingConfig, profile: import('../embedding/ProfileManager.js').EmbeddingProfile): Promise<void> {
+  async addCustomProfile(config: EmbeddingConfig, profile: EmbeddingProfile): Promise<void> {
     if (!config.customProfiles) {
       config.customProfiles = [];
     }
@@ -246,7 +247,7 @@ export class ConfigService {
    * @param config - Current configuration
    * @returns Array of custom profiles
    */
-  getCustomProfiles(config: EmbeddingConfig): import('../embedding/ProfileManager.js').EmbeddingProfile[] {
+  getCustomProfiles(config: EmbeddingConfig): EmbeddingProfile[] {
     return config.customProfiles || [];
   }
 

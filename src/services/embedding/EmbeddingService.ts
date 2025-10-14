@@ -268,7 +268,7 @@ export class EmbeddingService {
     const startTime = Date.now();
     const profile = options.profile || this.currentProfile;
     const batchSize = options.batchSize || profile.batchSize;
-    const useCache = options.useCache !== false;
+    // Note: useCache is handled inline in the embedTexts() call, no need to store it
 
     // T080: Use p-limit for concurrency control (max 4 concurrent file reads)
     const limit = pLimit(4);
@@ -593,7 +593,7 @@ export class EmbeddingService {
     // Extract sorted arrays
     return {
       texts: indexed.map(item => item.text),
-      originalIndices: indexed.map(item => item.originalIndex)
+      originalIndices: indexed.map(item => item.originalIndex!).filter((idx): idx is number => idx !== undefined)
     };
   }
 
