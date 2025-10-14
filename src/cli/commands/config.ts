@@ -10,6 +10,13 @@ import type { EmbeddingConfig } from '../../models/EmbeddingConfig.js';
 import type { Quantization, Backend } from '../../models/EmbeddingProfile.js';
 import { Logger } from '../utils/logger.js';
 import { OutputFormatter } from '../utils/output.js';
+import {
+  validateModelId,
+  validateProfileName,
+  validateBatchSize,
+  validateCacheDir,
+  sanitizeInput
+} from '../../lib/security-utils.js';
 
 interface ConfigOptions {
   json?: boolean;
@@ -263,20 +270,32 @@ async function setProfile(
 ): Promise<SetConfigResult> {
   logger.info('Setting profile', { profileName });
 
+  // Validate and sanitize profile name (T103, T104)
+  const sanitizedName = sanitizeInput(profileName, 50);
+  const nameValidation = validateProfileName(sanitizedName);
+
+  if (!nameValidation.valid) {
+    return {
+      success: false,
+      error: new Error(nameValidation.error || 'Invalid profile name'),
+      exitCode: 1
+    };
+  }
+
   // Load custom profiles into ProfileManager
   const profileManager = new ProfileManager();
   profileManager.loadCustomProfiles(configService.getCustomProfiles(config));
 
   // Check if profile exists (preset or custom) - T075
-  const isPreset = profileName in PRESET_PROFILES;
+  const isPreset = sanitizedName in PRESET_PROFILES;
   const customProfiles = configService.getCustomProfiles(config);
-  const isCustom = customProfiles.some(p => p.name === profileName);
+  const isCustom = customProfiles.some(p => p.name === sanitizedName);
 
   if (!isPreset && !isCustom) {
     const availableProfiles = ['light', 'balanced', 'performance', ...customProfiles.map(p => p.name)];
     return {
       success: false,
-      error: new Error(`Profile not found: ${profileName}. Available profiles: ${availableProfiles.join(', ')}`),
+      error: new Error(`Profile not found: ${sanitizedName}. Available profiles: ${availableProfiles.join(', ')}`),
       exitCode: 1
     };
   }
@@ -286,12 +305,12 @@ async function setProfile(
   const hardware = await hardwareDetector.detect();
 
   // Get the profile
-  const newProfile = profileManager.getProfile(profileName, hardware);
+  const newProfile = profileManager.getProfile(sanitizedName, hardware);
 
   if (!newProfile) {
     return {
       success: false,
-      error: new Error(`Failed to load profile: ${profileName}`),
+      error: new Error(`Failed to load profile: ${sanitizedName}`),
       exitCode: 1
     };
   }
@@ -362,26 +381,30 @@ async function setModel(
 ): Promise<SetConfigResult> {
   logger.info('Setting model', { modelId, modelVersion });
 
-  // Validate model ID format (basic check)
-  // Can be Hugging Face ID (org/model) or local path
-  const isHuggingFaceId = modelId.includes('/');
-  const isLocalPath = modelId.startsWith('.') || isAbsolute(modelId);
+  // Sanitize inputs (T104)
+  const sanitizedModelId = sanitizeInput(modelId, 500);
+  const sanitizedVersion = sanitizeInput(modelVersion, 100);
 
-  if (!isHuggingFaceId && !isLocalPath) {
+  // Validate model ID with security checks (T103)
+  const validation = validateModelId(sanitizedModelId, projectRoot);
+
+  if (!validation.valid) {
     return {
       success: false,
-      error: new Error('Model must be a Hugging Face ID (org/model) or local path'),
+      error: new Error(validation.error || 'Invalid model ID'),
       exitCode: 1
     };
   }
 
+  // Use the sanitized model ID
+  const validatedModelId = validation.sanitized || sanitizedModelId;
+
   // If local path, validate it exists
-  if (isLocalPath) {
-    const absolutePath = isAbsolute(modelId) ? modelId : resolve(projectRoot, modelId);
-    if (!existsSync(absolutePath)) {
+  if (validatedModelId.startsWith('/') || validatedModelId.startsWith('./') || isAbsolute(validatedModelId)) {
+    if (!existsSync(validatedModelId)) {
       return {
         success: false,
-        error: new Error(`Local model path not found: ${absolutePath}`),
+        error: new Error(`Local model path not found: ${validatedModelId}`),
         exitCode: 1
       };
     }
@@ -396,18 +419,18 @@ async function setModel(
   const oldModel = config.profile.model;
   const oldVersion = config.profile.modelVersion;
 
-  config.profile.model = modelId;
-  config.profile.modelVersion = modelVersion;
+  config.profile.model = validatedModelId;
+  config.profile.modelVersion = sanitizedVersion;
 
   await configService.save(config);
 
-  logger.info('Model updated', { modelId, modelVersion, oldModel, oldVersion });
+  logger.info('Model updated', { modelId: validatedModelId, modelVersion: sanitizedVersion, oldModel, oldVersion });
 
   return {
     success: true,
     details: {
-      model: modelId,
-      version: modelVersion,
+      model: validatedModelId,
+      version: sanitizedVersion,
       previous_model: oldModel,
       previous_version: oldVersion,
       note: 'Model dimensions not auto-detected. Run "code-index embed --rebuild" if dimensions changed.'
@@ -533,13 +556,19 @@ async function setBatchSize(
 ): Promise<SetConfigResult> {
   logger.info('Setting batch size', { batchSizeStr });
 
-  // Parse and validate batch size
-  const batchSize = parseInt(batchSizeStr, 10);
+  // Sanitize input (T104)
+  const sanitized = sanitizeInput(batchSizeStr, 10);
 
-  if (isNaN(batchSize) || batchSize < 1 || batchSize > 256) {
+  // Parse and validate batch size
+  const batchSize = parseInt(sanitized, 10);
+
+  // Use validation function (T103, T104)
+  const validation = validateBatchSize(batchSize, 1, 256);
+
+  if (!validation.valid) {
     return {
       success: false,
-      error: new Error('Batch size must be a number between 1 and 256'),
+      error: new Error(validation.error || 'Invalid batch size'),
       exitCode: 1
     };
   }
@@ -574,8 +603,18 @@ async function setCacheDir(
 ): Promise<SetConfigResult> {
   logger.info('Setting cache directory', { cacheDir });
 
-  // Resolve path (can be absolute or relative to project root)
-  const absoluteCacheDir = isAbsolute(cacheDir) ? cacheDir : resolve(projectRoot, cacheDir);
+  // Validate cache directory with security checks (T103, T104)
+  const validation = validateCacheDir(cacheDir, projectRoot);
+
+  if (!validation.valid) {
+    return {
+      success: false,
+      error: new Error(validation.error || 'Invalid cache directory'),
+      exitCode: 1
+    };
+  }
+
+  const absoluteCacheDir = validation.sanitized || resolve(projectRoot, cacheDir);
 
   // Check if directory exists, create if not
   if (!existsSync(absoluteCacheDir)) {
