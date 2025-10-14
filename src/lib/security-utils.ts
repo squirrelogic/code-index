@@ -3,6 +3,7 @@
  */
 
 import { resolve, isAbsolute, normalize } from 'path';
+import { INPUT_LIMITS, BATCH_CONFIG, MODEL_CONFIG } from '../constants/embedding-constants.js';
 
 /**
  * Validates a model ID to prevent path traversal attacks
@@ -127,10 +128,10 @@ export function validateModelId(
  * Sanitizes a CLI string input by removing dangerous characters
  *
  * @param input - The input string to sanitize
- * @param maxLength - Maximum allowed length (default: 1000)
+ * @param maxLength - Maximum allowed length (default from INPUT_LIMITS)
  * @returns Sanitized string
  */
-export function sanitizeInput(input: string, maxLength: number = 1000): string {
+export function sanitizeInput(input: string, maxLength: number = INPUT_LIMITS.MAX_INPUT_LENGTH): string {
   if (!input) return '';
 
   // Trim whitespace
@@ -164,8 +165,8 @@ export function validateProfileName(profileName: string): { valid: boolean; erro
   const trimmed = profileName.trim();
 
   // Check length
-  if (trimmed.length > 50) {
-    return { valid: false, error: 'Profile name must be 50 characters or less' };
+  if (trimmed.length > INPUT_LIMITS.MAX_PROFILE_NAME_LENGTH) {
+    return { valid: false, error: `Profile name must be ${INPUT_LIMITS.MAX_PROFILE_NAME_LENGTH} characters or less` };
   }
 
   // Check for valid characters (alphanumeric, hyphens, underscores)
@@ -184,14 +185,14 @@ export function validateProfileName(profileName: string): { valid: boolean; erro
  * Validates a batch size value
  *
  * @param batchSize - The batch size to validate
- * @param min - Minimum allowed value (default: 1)
- * @param max - Maximum allowed value (default: 256)
+ * @param min - Minimum allowed value (default from BATCH_CONFIG)
+ * @param max - Maximum allowed value (default from BATCH_CONFIG)
  * @returns Validation result
  */
 export function validateBatchSize(
   batchSize: number,
-  min: number = 1,
-  max: number = 256
+  min: number = BATCH_CONFIG.MIN_BATCH_SIZE,
+  max: number = BATCH_CONFIG.MAX_BATCH_SIZE
 ): { valid: boolean; error?: string } {
   if (!Number.isInteger(batchSize)) {
     return { valid: false, error: 'Batch size must be an integer' };

@@ -17,6 +17,11 @@ import {
   validateCacheDir,
   sanitizeInput
 } from '../../lib/security-utils.js';
+import {
+  INPUT_LIMITS,
+  BATCH_CONFIG,
+  MODEL_CONFIG
+} from '../../constants/embedding-constants.js';
 
 interface ConfigOptions {
   json?: boolean;
@@ -271,7 +276,7 @@ async function setProfile(
   logger.info('Setting profile', { profileName });
 
   // Validate and sanitize profile name (T103, T104)
-  const sanitizedName = sanitizeInput(profileName, 50);
+  const sanitizedName = sanitizeInput(profileName, INPUT_LIMITS.MAX_PROFILE_NAME_LENGTH);
   const nameValidation = validateProfileName(sanitizedName);
 
   if (!nameValidation.valid) {
@@ -382,8 +387,8 @@ async function setModel(
   logger.info('Setting model', { modelId, modelVersion });
 
   // Sanitize inputs (T104)
-  const sanitizedModelId = sanitizeInput(modelId, 500);
-  const sanitizedVersion = sanitizeInput(modelVersion, 100);
+  const sanitizedModelId = sanitizeInput(modelId, MODEL_CONFIG.MAX_MODEL_ID_LENGTH);
+  const sanitizedVersion = sanitizeInput(modelVersion, MODEL_CONFIG.MAX_MODEL_VERSION_LENGTH);
 
   // Validate model ID with security checks (T103)
   const validation = validateModelId(sanitizedModelId, projectRoot);
@@ -557,13 +562,13 @@ async function setBatchSize(
   logger.info('Setting batch size', { batchSizeStr });
 
   // Sanitize input (T104)
-  const sanitized = sanitizeInput(batchSizeStr, 10);
+  const sanitized = sanitizeInput(batchSizeStr, INPUT_LIMITS.MAX_BATCH_SIZE_STRING_LENGTH);
 
   // Parse and validate batch size
   const batchSize = parseInt(sanitized, 10);
 
   // Use validation function (T103, T104)
-  const validation = validateBatchSize(batchSize, 1, 256);
+  const validation = validateBatchSize(batchSize, BATCH_CONFIG.MIN_BATCH_SIZE, BATCH_CONFIG.MAX_BATCH_SIZE);
 
   if (!validation.valid) {
     return {
