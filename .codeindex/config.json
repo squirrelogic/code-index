@@ -1,0 +1,38 @@
+{
+  "version": "1.0.0",
+  "profile": {
+    "name": "balanced",
+    "model": "Xenova/all-mpnet-base-v2",
+    "modelVersion": "main",
+    "backend": "onnx",
+    "device": "mps",
+    "quantization": "fp16",
+    "batchSize": 32,
+    "dimensions": 768,
+    "cacheDir": ".codeindex/cache"
+  },
+  "hardwareCapabilities": {
+    "cpuCores": 16,
+    "totalRAM": 51539607552,
+    "freeRAM": 12257509376,
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpuModel": "Apple M4 Max",
+    "gpu": {
+      "vendor": "Apple",
+      "name": "Apple M4 Max",
+      "memory": 51539607552,
+      "driverVersion": null,
+      "computeCapability": null,
+      "metalVersion": "4.0"
+    },
+    "detectedAt": "2025-10-14T02:22:36.296Z",
+    "onnxProviders": [
+      "CoreMLExecutionProvider",
+      "CPUExecutionProvider"
+    ]
+  },
+  "fallbackHistory": [],
+  "createdAt": "2025-10-14T02:22:36.297Z",
+  "updatedAt": "2025-10-14T02:22:36.297Z"
+}

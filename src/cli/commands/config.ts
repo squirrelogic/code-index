@@ -109,6 +109,61 @@ export function createConfigCommand(): Command {
       }
     });
 
+  // config profile list (T072)
+  cmd
+    .command('profile list')
+    .alias('profiles')
+    .description('List all available profiles (preset + custom)')
+    .option('--json', 'Output result as JSON')
+    .action(async (options: ConfigOptions) => {
+      const output = new OutputFormatter(
+        options.json ? 'json' as any : 'human' as any
+      );
+
+      try {
+        const projectRoot = process.cwd();
+        const result = await listProfiles(projectRoot, output);
+
+        if (result.success) {
+          output.success('Available Profiles', result.profiles);
+          process.exit(0);
+        } else {
+          output.error('Failed to list profiles', result.error);
+          process.exit(1);
+        }
+      } catch (error: any) {
+        output.error('Unexpected error during profile list', error);
+        process.exit(1);
+      }
+    });
+
+  // config profile delete (T073)
+  cmd
+    .command('profile delete <name>')
+    .description('Delete a custom profile')
+    .option('--json', 'Output result as JSON')
+    .action(async (name: string, options: ConfigOptions) => {
+      const output = new OutputFormatter(
+        options.json ? 'json' as any : 'human' as any
+      );
+
+      try {
+        const projectRoot = process.cwd();
+        const result = await deleteProfile(projectRoot, name, output);
+
+        if (result.success) {
+          output.success(`Profile deleted: ${name}`, result.details);
+          process.exit(0);
+        } else {
+          output.error(`Failed to delete profile: ${name}`, result.error);
+          process.exit(result.exitCode || 1);
+        }
+      } catch (error: any) {
+        output.error('Unexpected error during profile deletion', error);
+        process.exit(1);
+      }
+    });
+
   return cmd;
 }
 
@@ -196,7 +251,7 @@ async function setConfigValue(
 }
 
 /**
- * Set embedding profile (T046)
+ * Set embedding profile (T046, T070, T075)
  */
 async function setProfile(
   projectRoot: string,
@@ -208,17 +263,20 @@ async function setProfile(
 ): Promise<SetConfigResult> {
   logger.info('Setting profile', { profileName });
 
-  // Check if profile exists (preset or custom)
+  // Load custom profiles into ProfileManager
   const profileManager = new ProfileManager();
+  profileManager.loadCustomProfiles(configService.getCustomProfiles(config));
 
-  // Check preset profiles
+  // Check if profile exists (preset or custom) - T075
   const isPreset = profileName in PRESET_PROFILES;
+  const customProfiles = configService.getCustomProfiles(config);
+  const isCustom = customProfiles.some(p => p.name === profileName);
 
-  if (!isPreset) {
-    // TODO: In Phase 7 (US5), check custom profiles
+  if (!isPreset && !isCustom) {
+    const availableProfiles = ['light', 'balanced', 'performance', ...customProfiles.map(p => p.name)];
     return {
       success: false,
-      error: new Error(`Profile not found: ${profileName}. Available profiles: light, balanced, performance`),
+      error: new Error(`Profile not found: ${profileName}. Available profiles: ${availableProfiles.join(', ')}`),
       exitCode: 1
     };
   }
@@ -692,4 +750,130 @@ async function listConfig(
       updated: config.updatedAt
     }
   };
+}
+
+/**
+ * List all available profiles (T072)
+ */
+async function listProfiles(
+  projectRoot: string,
+  _output: OutputFormatter
+): Promise<{ success: boolean; profiles?: any; error?: Error }> {
+  const logger = new Logger(projectRoot);
+
+  // Check if project is initialized
+  const configPath = join(projectRoot, '.codeindex', 'config.json');
+  if (!existsSync(configPath)) {
+    return {
+      success: false,
+      error: new Error('Project not initialized. Run "code-index init" first.')
+    };
+  }
+
+  // Load configuration
+  const configService = new ConfigService(projectRoot);
+  const config = await configService.load();
+
+  // Get preset profiles
+  const presetProfiles = Object.entries(PRESET_PROFILES).map(([name, profile]) => ({
+    name,
+    type: 'preset',
+    model: profile.model,
+    dimensions: profile.dimensions,
+    device: profile.device,
+    quantization: profile.quantization,
+    batchSize: profile.batchSize
+  }));
+
+  // Get custom profiles
+  const customProfiles = configService.getCustomProfiles(config).map(profile => ({
+    name: profile.name,
+    type: 'custom',
+    model: profile.model,
+    dimensions: profile.dimensions,
+    device: profile.device,
+    quantization: profile.quantization,
+    batchSize: profile.batchSize
+  }));
+
+  logger.info('Profiles listed', {
+    presetCount: presetProfiles.length,
+    customCount: customProfiles.length
+  });
+
+  return {
+    success: true,
+    profiles: {
+      preset: presetProfiles,
+      custom: customProfiles,
+      total: presetProfiles.length + customProfiles.length
+    }
+  };
+}
+
+/**
+ * Delete a custom profile (T073)
+ */
+async function deleteProfile(
+  projectRoot: string,
+  profileName: string,
+  output: OutputFormatter
+): Promise<SetConfigResult> {
+  const logger = new Logger(projectRoot);
+
+  // Check if project is initialized
+  const configPath = join(projectRoot, '.codeindex', 'config.json');
+  if (!existsSync(configPath)) {
+    return {
+      success: false,
+      error: new Error('Project not initialized. Run "code-index init" first.'),
+      exitCode: 2
+    };
+  }
+
+  // Prevent deleting preset profiles
+  if (profileName in PRESET_PROFILES) {
+    return {
+      success: false,
+      error: new Error(`Cannot delete preset profile: ${profileName}`),
+      exitCode: 1
+    };
+  }
+
+  // Load configuration
+  const configService = new ConfigService(projectRoot);
+  const config = await configService.load();
+
+  // Check if this is the active profile
+  if (config.profile.name === profileName) {
+    output.warning('Cannot delete the currently active profile');
+    output.info('Switch to a different profile first with: code-index config set embedding.profile <profile>');
+    return {
+      success: false,
+      error: new Error(`Cannot delete active profile: ${profileName}`),
+      exitCode: 1
+    };
+  }
+
+  try {
+    // Delete the profile
+    await configService.deleteCustomProfile(config, profileName);
+
+    logger.info('Profile deleted', { profileName });
+
+    return {
+      success: true,
+      details: {
+        profile: profileName,
+        deleted: true
+      }
+    };
+  } catch (error: any) {
+    logger.error('Failed to delete profile', { profileName, error });
+    return {
+      success: false,
+      error,
+      exitCode: 1
+    };
+  }
 }

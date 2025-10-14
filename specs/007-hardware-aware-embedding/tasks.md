@@ -163,13 +163,13 @@
 
 ### Implementation for User Story 5
 
-- [ ] T069 [US5] Extend ProfileManager to support custom profiles in src/services/embedding/ProfileManager.ts (load custom profiles from config, validate custom profile parameters)
-- [ ] T070 [US5] Implement config set embedding.profile command for custom profiles in src/cli/commands/config.ts (create new profile if name not in presets, validate all required fields)
-- [ ] T071 [US5] Add custom profile validation in src/services/embedding/ProfileManager.ts (validate model exists, backend+device+quantization compatible, batch size in range)
-- [ ] T072 [US5] Implement profile listing command in src/cli/commands/config.ts (show all available profiles: presets + custom, include profile details)
-- [ ] T073 [US5] Implement profile deletion command in src/cli/commands/config.ts (delete custom profile, prevent deletion of preset profiles)
-- [ ] T074 [US5] Add custom profile persistence in src/services/config/ConfigService.ts (store custom profiles in config.json under customProfiles section)
-- [ ] T075 [US5] Support switching between preset and custom profiles in src/cli/commands/config.ts (validate profile exists in either presets or custom)
+- [X] T069 [US5] Extend ProfileManager to support custom profiles in src/services/embedding/ProfileManager.ts (load custom profiles from config, validate custom profile parameters)
+- [X] T070 [US5] Implement config set embedding.profile command for custom profiles in src/cli/commands/config.ts (create new profile if name not in presets, validate all required fields)
+- [X] T071 [US5] Add custom profile validation in src/services/embedding/ProfileManager.ts (validate model exists, backend+device+quantization compatible, batch size in range)
+- [X] T072 [US5] Implement profile listing command in src/cli/commands/config.ts (show all available profiles: presets + custom, include profile details)
+- [X] T073 [US5] Implement profile deletion command in src/cli/commands/config.ts (delete custom profile, prevent deletion of preset profiles)
+- [X] T074 [US5] Add custom profile persistence in src/services/config/ConfigService.ts (store custom profiles in config.json under customProfiles section)
+- [X] T075 [US5] Support switching between preset and custom profiles in src/cli/commands/config.ts (validate profile exists in either presets or custom)
 
 **Checkpoint**: Custom profiles should be fully functional - advanced users can create and manage specialized configurations
 

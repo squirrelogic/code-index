@@ -106,6 +106,7 @@ export class ConfigService {
       version: CONFIG_VERSION,
       profile,
       hardwareCapabilities: hardware,
+      customProfiles: [], // T074: Initialize empty custom profiles array
       fallbackHistory: [],
       createdAt: new Date(),
       updatedAt: new Date()
@@ -194,6 +195,59 @@ export class ConfigService {
   async clearFallbackHistory(config: EmbeddingConfig): Promise<void> {
     config.fallbackHistory = [];
     await this.save(config);
+  }
+
+  /**
+   * Add or update a custom profile (T074)
+   * @param config - Current configuration
+   * @param profile - Custom profile to add
+   */
+  async addCustomProfile(config: EmbeddingConfig, profile: import('../embedding/ProfileManager.js').EmbeddingProfile): Promise<void> {
+    if (!config.customProfiles) {
+      config.customProfiles = [];
+    }
+
+    // Check if profile already exists
+    const existingIndex = config.customProfiles.findIndex(p => p.name === profile.name);
+
+    if (existingIndex >= 0) {
+      // Update existing profile
+      config.customProfiles[existingIndex] = profile;
+    } else {
+      // Add new profile
+      config.customProfiles.push(profile);
+    }
+
+    await this.save(config);
+  }
+
+  /**
+   * Remove a custom profile (T074)
+   * @param config - Current configuration
+   * @param profileName - Name of profile to remove
+   */
+  async deleteCustomProfile(config: EmbeddingConfig, profileName: string): Promise<void> {
+    if (!config.customProfiles) {
+      config.customProfiles = [];
+    }
+
+    const beforeCount = config.customProfiles.length;
+    config.customProfiles = config.customProfiles.filter(p => p.name !== profileName);
+
+    if (config.customProfiles.length === beforeCount) {
+      throw new Error(`Custom profile not found: ${profileName}`);
+    }
+
+    await this.save(config);
+  }
+
+  /**
+   * Get all custom profiles (T074)
+   * @param config - Current configuration
+   * @returns Array of custom profiles
+   */
+  getCustomProfiles(config: EmbeddingConfig): import('../embedding/ProfileManager.js').EmbeddingProfile[] {
+    return config.customProfiles || [];
   }
 
   /**

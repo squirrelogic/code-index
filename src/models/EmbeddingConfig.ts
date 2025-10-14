@@ -18,6 +18,9 @@ export interface EmbeddingConfig {
   /** Last detected hardware */
   hardwareCapabilities: HardwareCapabilities;
 
+  /** Custom user-defined profiles (T074) */
+  customProfiles?: EmbeddingProfile[];
+
   /** History of fallback actions (last 10 events) */
   fallbackHistory: FallbackEvent[];
 
@@ -53,7 +56,7 @@ export function validateEmbeddingConfig(
 }
 
 /**
- * Serializes config to JSON for storage
+ * Serializes config to JSON for storage (T074 - includes custom profiles)
  */
 export function serializeEmbeddingConfig(config: EmbeddingConfig): string {
   return JSON.stringify(
@@ -64,6 +67,7 @@ export function serializeEmbeddingConfig(config: EmbeddingConfig): string {
         ...config.hardwareCapabilities,
         detectedAt: config.hardwareCapabilities.detectedAt.toISOString()
       },
+      customProfiles: config.customProfiles || [],
       fallbackHistory: config.fallbackHistory.map((event) => ({
         ...event,
         timestamp: event.timestamp.toISOString()

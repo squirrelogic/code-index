@@ -82,18 +82,42 @@ export class ProfileManager {
   }
 
   /**
-   * Add a custom profile
+   * Add a custom profile (T069, T071)
    *
    * @param profile Custom embedding profile
+   * @param capabilities Hardware capabilities for validation (optional)
    * @throws Error if profile name conflicts with preset or validation fails
    */
-  addCustomProfile(profile: EmbeddingProfile): void {
+  addCustomProfile(profile: EmbeddingProfile, capabilities?: HardwareCapabilities): void {
     // Prevent overriding preset profiles
     if (profile.name in PRESET_PROFILES) {
       throw new Error(`Cannot create custom profile with preset name: ${profile.name}`);
     }
 
     // Validate profile structure
+    this.validateCustomProfile(profile, capabilities);
+
+    // Store custom profile
+    this.customProfiles.set(profile.name, profile);
+  }
+
+  /**
+   * Validate custom profile parameters (T071)
+   *
+   * @param profile Profile to validate
+   * @param capabilities Hardware capabilities for compatibility checks (optional)
+   * @throws Error if validation fails
+   */
+  validateCustomProfile(profile: EmbeddingProfile, capabilities?: HardwareCapabilities): void {
+    // Basic structure validation
+    if (!profile.name || profile.name.trim().length === 0) {
+      throw new Error('Profile name cannot be empty');
+    }
+
+    if (!profile.model || profile.model.trim().length === 0) {
+      throw new Error('Model must be specified');
+    }
+
     if (profile.batchSize < 1 || profile.batchSize > 256) {
       throw new Error(`Invalid batch size: ${profile.batchSize} (must be 1-256)`);
     }
@@ -102,8 +126,48 @@ export class ProfileManager {
       throw new Error(`Invalid dimensions: ${profile.dimensions} (must be > 0)`);
     }
 
-    // Store custom profile
-    this.customProfiles.set(profile.name, profile);
+    if (!profile.backend || !['onnx', 'pytorch'].includes(profile.backend)) {
+      throw new Error(`Invalid backend: ${profile.backend} (must be 'onnx' or 'pytorch')`);
+    }
+
+    if (!profile.device || !['cpu', 'mps', 'cuda', 'auto'].includes(profile.device)) {
+      throw new Error(`Invalid device: ${profile.device} (must be 'cpu', 'mps', 'cuda', or 'auto')`);
+    }
+
+    if (!profile.quantization || !['int8', 'int4', 'fp16', 'fp32', 'auto'].includes(profile.quantization)) {
+      throw new Error(`Invalid quantization: ${profile.quantization} (must be 'int8', 'int4', 'fp16', 'fp32', or 'auto')`);
+    }
+
+    // Hardware compatibility validation if capabilities provided
+    if (capabilities) {
+      // Resolve profile to check actual device (not 'auto')
+      const resolved = this.resolveProfile(profile, capabilities);
+
+      // Validate backend + device + quantization compatibility
+      if (resolved.backend === 'onnx') {
+        // ONNX Runtime supports all devices
+        if (resolved.device === 'cuda' && !capabilities.onnxProviders.includes('CUDAExecutionProvider')) {
+          throw new Error('CUDA device specified but CUDAExecutionProvider not available in ONNX Runtime');
+        }
+
+        if (resolved.device === 'mps' && !capabilities.onnxProviders.includes('CoreMLExecutionProvider')) {
+          throw new Error('MPS device specified but CoreMLExecutionProvider not available in ONNX Runtime');
+        }
+      }
+
+      if (resolved.backend === 'pytorch') {
+        throw new Error('PyTorch backend is not yet supported');
+      }
+
+      // Validate quantization compatibility with device
+      if (resolved.device === 'cpu' && resolved.quantization === 'fp16') {
+        throw new Error('fp16 quantization is not efficient on CPU. Use int8 instead.');
+      }
+
+      if ((resolved.device === 'mps' || resolved.device === 'cuda') && (resolved.quantization === 'int4' || resolved.quantization === 'int8')) {
+        throw new Error(`${resolved.quantization} quantization is optimized for CPU, not recommended for GPU`);
+      }
+    }
   }
 
   /**
