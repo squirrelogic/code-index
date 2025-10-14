@@ -138,18 +138,18 @@
 
 ### Implementation for User Story 3
 
-- [ ] T057 [US3] Implement doctor command in src/cli/commands/doctor.ts (re-detect hardware, load config, validate model, check ONNX providers, report recent fallbacks)
-- [ ] T058 [US3] Add hardware diagnostics display in src/cli/commands/doctor.ts (format CPU, RAM, GPU, platform details in human-readable format)
-- [ ] T059 [US3] Add configuration diagnostics display in src/cli/commands/doctor.ts (show profile, model, dimensions, backend, device, quantization, batch size)
-- [ ] T060 [US3] Add model status diagnostics in src/cli/commands/doctor.ts (check if cached locally, show size, show path, validate compatibility with hardware)
-- [ ] T061 [US3] Add ONNX Runtime provider diagnostics in src/cli/commands/doctor.ts (list available providers, show active provider)
-- [ ] T062 [US3] Add cache diagnostics in src/cli/commands/doctor.ts (show location, size, entry count, calculate hit rate from lastAccessedAt timestamps)
-- [ ] T063 [US3] Add recent fallback history display in src/cli/commands/doctor.ts (show last 10 fallback events from config.fallbackHistory)
-- [ ] T064 [US3] Implement configuration issue detection in src/cli/commands/doctor.ts (detect CUDA configured but unavailable, batch size too large for RAM, model not cached, etc.)
-- [ ] T065 [US3] Add recommendations engine in src/cli/commands/doctor.ts (suggest fixes for detected issues like batch size reduction, device switching, profile changes)
-- [ ] T066 [US3] Implement --json flag for doctor command (output diagnostics as structured JSON per CLI contract)
-- [ ] T067 [US3] Implement --verbose flag for doctor command (show detailed hardware info, full ONNX provider list, model metadata)
-- [ ] T068 [US3] Add exit codes for doctor command per CLI contract (0=healthy, 1=config issues, 2=hardware detection failed, 3=model validation failed)
+- [X] T057 [US3] Implement doctor command in src/cli/commands/doctor.ts (re-detect hardware, load config, validate model, check ONNX providers, report recent fallbacks)
+- [X] T058 [US3] Add hardware diagnostics display in src/cli/commands/doctor.ts (format CPU, RAM, GPU, platform details in human-readable format)
+- [X] T059 [US3] Add configuration diagnostics display in src/cli/commands/doctor.ts (show profile, model, dimensions, backend, device, quantization, batch size)
+- [X] T060 [US3] Add model status diagnostics in src/cli/commands/doctor.ts (check if cached locally, show size, show path, validate compatibility with hardware)
+- [X] T061 [US3] Add ONNX Runtime provider diagnostics in src/cli/commands/doctor.ts (list available providers, show active provider)
+- [X] T062 [US3] Add cache diagnostics in src/cli/commands/doctor.ts (show location, size, entry count, calculate hit rate from lastAccessedAt timestamps)
+- [X] T063 [US3] Add recent fallback history display in src/cli/commands/doctor.ts (show last 10 fallback events from config.fallbackHistory)
+- [X] T064 [US3] Implement configuration issue detection in src/cli/commands/doctor.ts (detect CUDA configured but unavailable, batch size too large for RAM, model not cached, etc.)
+- [X] T065 [US3] Add recommendations engine in src/cli/commands/doctor.ts (suggest fixes for detected issues like batch size reduction, device switching, profile changes)
+- [X] T066 [US3] Implement --json flag for doctor command (output diagnostics as structured JSON per CLI contract)
+- [X] T067 [US3] Implement --verbose flag for doctor command (show detailed hardware info, full ONNX provider list, model metadata)
+- [X] T068 [US3] Add exit codes for doctor command per CLI contract (0=healthy, 1=config issues, 2=hardware detection failed, 3=model validation failed)
 
 **Checkpoint**: Diagnostics should be fully functional - users can troubleshoot and understand system status
 

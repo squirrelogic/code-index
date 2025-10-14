@@ -19,11 +19,39 @@ import {
   createIssue,
   FIX_SUGGESTIONS
 } from '../../models/health-check.js';
+import { HardwareDetector } from '../../services/hardware/HardwareDetector.js';
+import { ConfigService } from '../../services/config/ConfigService.js';
+import { EmbeddingCache } from '../../services/cache/EmbeddingCache.js';
+import type { EmbeddingConfig } from '../../models/EmbeddingConfig.js';
+import type { HardwareCapabilities } from '../../models/HardwareCapabilities.js';
 
 interface DoctorOptions {
   verbose?: boolean;
   json?: boolean;
   fix?: boolean;
+}
+
+interface EmbeddingDiagnostics {
+  hardware?: HardwareCapabilities;
+  config?: EmbeddingConfig;
+  modelStatus?: {
+    cached: boolean;
+    size: number | null;
+    path: string;
+    compatible: boolean;
+  };
+  onnxRuntime?: {
+    availableProviders: string[];
+    activeProvider: string;
+  };
+  cache?: {
+    location: string;
+    size: number;
+    entries: number;
+    hitRate: number;
+  };
+  issues: string[];
+  recommendations: string[];
 }
 
 /**
@@ -106,6 +134,44 @@ export function createDoctorCommand(): Command {
         });
         issues.push(...nodeCheck.issues);
 
+        // Check 7: Embedding Diagnostics (if initialized)
+        let embeddingDiagnostics: EmbeddingDiagnostics | null = null;
+        const embeddingCheckStart = Date.now();
+        try {
+          embeddingDiagnostics = await checkEmbeddingDiagnostics(projectRoot, options.verbose || false);
+
+          // Add embedding-specific issues
+          for (const issue of embeddingDiagnostics.issues) {
+            issues.push(createIssue(
+              IssueSeverity.MEDIUM,
+              ComponentName.CONFIGURATION,
+              IssueCode.CONFIG_MISSING,
+              issue,
+              false
+            ));
+          }
+
+          // Add embedding-specific recommendations
+          suggestions.push(...embeddingDiagnostics.recommendations);
+
+          components.push({
+            name: ComponentName.CONFIGURATION,
+            status: embeddingDiagnostics.issues.length === 0 ? HealthStatus.HEALTHY : HealthStatus.WARNING,
+            message: embeddingDiagnostics.issues.length === 0
+              ? 'Embedding configuration healthy'
+              : `${embeddingDiagnostics.issues.length} embedding issue(s) detected`,
+            checkDurationMs: Date.now() - embeddingCheckStart,
+            details: embeddingDiagnostics.config ? {
+              profile: embeddingDiagnostics.config.profile.name,
+              model: embeddingDiagnostics.config.profile.model,
+              device: embeddingDiagnostics.config.profile.device
+            } : undefined
+          });
+        } catch (error: any) {
+          logger.warn('embedding-diagnostics-skipped', { reason: error.message });
+          // Embedding not initialized - skip diagnostics
+        }
+
         // Generate suggestions for issues
         for (const issue of issues) {
           const suggestion = FIX_SUGGESTIONS[issue.code as IssueCode];
@@ -138,6 +204,7 @@ export function createDoctorCommand(): Command {
         if (options.json) {
           formatter.json({
             ...result,
+            embedding: embeddingDiagnostics || undefined,
             fixResults: options.fix ? fixResults : undefined,
             checkDurationMs: Date.now() - startTime
           });
@@ -154,6 +221,11 @@ export function createDoctorCommand(): Command {
                 console.log(chalk.gray(`     ${key}: ${value}`));
               }
             }
+          }
+
+          // Display embedding diagnostics if available
+          if (embeddingDiagnostics) {
+            displayEmbeddingDiagnostics(embeddingDiagnostics, options.verbose || false);
           }
 
           // Display issues
@@ -621,5 +693,419 @@ function getSeverityColor(severity: IssueSeverity): typeof chalk {
     case IssueSeverity.MEDIUM: return chalk.yellow;
     case IssueSeverity.HIGH: return chalk.red;
     case IssueSeverity.CRITICAL: return chalk.red.bold;
+  }
+}
+
+/**
+ * Check embedding-specific diagnostics
+ */
+async function checkEmbeddingDiagnostics(
+  projectRoot: string,
+  _verbose: boolean
+): Promise<EmbeddingDiagnostics> {
+  const diagnostics: EmbeddingDiagnostics = {
+    issues: [],
+    recommendations: []
+  };
+
+  // Load configuration
+  const configService = new ConfigService(projectRoot);
+  const configExists = await configService.exists();
+
+  if (!configExists) {
+    diagnostics.issues.push('Embedding not initialized. Run "code-index init" to set up.');
+    return diagnostics;
+  }
+
+  try {
+    diagnostics.config = await configService.load();
+  } catch (error: any) {
+    diagnostics.issues.push(`Failed to load embedding configuration: ${error.message}`);
+    return diagnostics;
+  }
+
+  // Re-detect hardware
+  try {
+    const detector = new HardwareDetector();
+    diagnostics.hardware = await detector.detect();
+
+    // Check hardware compatibility with config
+    const hwIssues = checkHardwareCompatibility(diagnostics.hardware, diagnostics.config);
+    diagnostics.issues.push(...hwIssues);
+  } catch (error: any) {
+    diagnostics.issues.push(`Hardware detection failed: ${error.message}`);
+  }
+
+  // Check model status
+  try {
+    diagnostics.modelStatus = await checkModelStatus(projectRoot, diagnostics.config);
+  } catch (error: any) {
+    diagnostics.issues.push(`Model status check failed: ${error.message}`);
+  }
+
+  // Check ONNX Runtime providers
+  try {
+    diagnostics.onnxRuntime = checkONNXProviders(diagnostics.hardware);
+  } catch (error: any) {
+    diagnostics.issues.push(`ONNX provider check failed: ${error.message}`);
+  }
+
+  // Check cache
+  try {
+    diagnostics.cache = await checkCacheStatus(projectRoot, diagnostics.config);
+  } catch (error: any) {
+    diagnostics.issues.push(`Cache check failed: ${error.message}`);
+  }
+
+  // Generate recommendations
+  diagnostics.recommendations = generateRecommendations(diagnostics);
+
+  return diagnostics;
+}
+
+/**
+ * Check hardware compatibility with configuration
+ */
+function checkHardwareCompatibility(
+  hardware: HardwareCapabilities,
+  config: EmbeddingConfig
+): string[] {
+  const issues: string[] = [];
+  const profile = config.profile;
+
+  // Check device compatibility
+  if (profile.device === 'cuda' && !hardware.gpu) {
+    issues.push('CUDA device configured but no GPU detected. Consider switching to CPU.');
+  }
+
+  if (profile.device === 'cuda' && hardware.gpu?.vendor !== 'NVIDIA') {
+    issues.push(`CUDA device configured but GPU is ${hardware.gpu?.vendor}. Consider switching device.`);
+  }
+
+  if (profile.device === 'mps' && hardware.platform !== 'darwin') {
+    issues.push('MPS device configured but not running on macOS. Switch to CPU or CUDA.');
+  }
+
+  // Check batch size vs available memory
+  const freeGB = hardware.freeRAM / (1024 * 1024 * 1024);
+  const estimatedMemoryGB = (profile.batchSize * profile.dimensions * 4) / (1024 * 1024 * 1024);
+
+  if (estimatedMemoryGB > freeGB * 0.5) {
+    issues.push(
+      `Batch size (${profile.batchSize}) may be too large for available memory (${freeGB.toFixed(1)} GB free). ` +
+      `Consider reducing to ${Math.floor(profile.batchSize / 2)}.`
+    );
+  }
+
+  return issues;
+}
+
+/**
+ * Check model status (cached, size, compatibility)
+ */
+async function checkModelStatus(
+  projectRoot: string,
+  config: EmbeddingConfig
+): Promise<{
+  cached: boolean;
+  size: number | null;
+  path: string;
+  compatible: boolean;
+}> {
+  const modelId = config.profile.model;
+  const modelsDir = join(projectRoot, '.codeindex', 'models');
+
+  // Convert model ID to directory name (e.g., "Xenova/all-MiniLM-L6-v2" -> "models--Xenova--all-MiniLM-L6-v2")
+  const modelDirName = 'models--' + modelId.replace(/\//g, '--');
+  const modelPath = join(modelsDir, modelDirName);
+
+  const cached = existsSync(modelPath);
+  let size: number | null = null;
+
+  if (cached) {
+    try {
+      // Calculate directory size
+      size = await getDirectorySize(modelPath);
+    } catch {
+      size = null;
+    }
+  }
+
+  return {
+    cached,
+    size,
+    path: modelPath,
+    compatible: true // Assume compatible for now
+  };
+}
+
+/**
+ * Calculate directory size recursively
+ */
+async function getDirectorySize(dirPath: string): Promise<number> {
+  const { readdir, stat } = await import('fs/promises');
+  let totalSize = 0;
+
+  try {
+    const files = await readdir(dirPath, { withFileTypes: true });
+
+    for (const file of files) {
+      const filePath = join(dirPath, file.name);
+
+      if (file.isDirectory()) {
+        totalSize += await getDirectorySize(filePath);
+      } else {
+        const stats = await stat(filePath);
+        totalSize += stats.size;
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+
+  return totalSize;
+}
+
+/**
+ * Check ONNX Runtime providers
+ */
+function checkONNXProviders(hardware?: HardwareCapabilities): {
+  availableProviders: string[];
+  activeProvider: string;
+} {
+  const providers = hardware?.onnxProviders || ['CPUExecutionProvider'];
+
+  // Active provider is the first in the list (highest priority)
+  const activeProvider = providers[0] || 'CPUExecutionProvider';
+
+  return {
+    availableProviders: providers,
+    activeProvider
+  };
+}
+
+/**
+ * Check cache status
+ */
+async function checkCacheStatus(
+  projectRoot: string,
+  config: EmbeddingConfig
+): Promise<{
+  location: string;
+  size: number;
+  entries: number;
+  hitRate: number;
+}> {
+  const cacheDir = join(projectRoot, config.profile.cacheDir);
+  const cache = new EmbeddingCache(cacheDir);
+
+  try {
+    await cache.initialize();
+    const stats = cache.getStats();
+    const hitRate = cache.getHitRate();
+
+    cache.close();
+
+    return {
+      location: join(cacheDir, 'embeddings.db'),
+      size: stats.totalSize,
+      entries: stats.totalEntries,
+      hitRate
+    };
+  } catch (error) {
+    // Cache not initialized or error
+    return {
+      location: join(cacheDir, 'embeddings.db'),
+      size: 0,
+      entries: 0,
+      hitRate: 0
+    };
+  }
+}
+
+/**
+ * Generate recommendations based on diagnostics
+ */
+function generateRecommendations(diagnostics: EmbeddingDiagnostics): string[] {
+  const recommendations: string[] = [];
+
+  // No issues detected
+  if (diagnostics.issues.length === 0) {
+    recommendations.push('System configuration optimal for detected hardware');
+    return recommendations;
+  }
+
+  // Hardware-specific recommendations
+  if (diagnostics.hardware && diagnostics.config) {
+    const profile = diagnostics.config.profile;
+
+    // GPU recommendations
+    if (diagnostics.hardware.gpu && profile.device === 'cpu') {
+      recommendations.push(
+        `GPU detected but using CPU. Consider switching to ${diagnostics.hardware.gpu.vendor === 'NVIDIA' ? 'CUDA' : 'MPS'} for better performance.`
+      );
+    }
+
+    // Memory recommendations
+    const freeGB = diagnostics.hardware.freeRAM / (1024 * 1024 * 1024);
+    if (freeGB < 2) {
+      recommendations.push('Low available memory detected. Consider using light profile or reducing batch size.');
+    }
+
+    // Model not cached
+    if (diagnostics.modelStatus && !diagnostics.modelStatus.cached) {
+      recommendations.push('Model not cached locally. First embedding run will download the model (requires network).');
+    }
+
+    // Cache recommendations
+    if (diagnostics.cache && diagnostics.cache.entries === 0) {
+      recommendations.push('No cached embeddings found. Run "code-index embed" to generate embeddings.');
+    }
+
+    if (diagnostics.cache && diagnostics.cache.hitRate < 0.5 && diagnostics.cache.entries > 100) {
+      recommendations.push('Low cache hit rate detected. Consider regenerating embeddings with "code-index embed --rebuild".');
+    }
+  }
+
+  return recommendations;
+}
+
+/**
+ * Display embedding diagnostics in human-readable format
+ */
+function displayEmbeddingDiagnostics(diagnostics: EmbeddingDiagnostics, verbose: boolean): void {
+  console.log('');
+  console.log(chalk.bold.cyan('Embedding Diagnostics:'));
+  console.log(chalk.cyan('='.repeat(50)));
+
+  // Hardware section
+  if (diagnostics.hardware) {
+    console.log('');
+    console.log(chalk.bold('Hardware:'));
+    console.log(`  CPU: ${diagnostics.hardware.cpuModel} (${diagnostics.hardware.cpuCores} cores)`);
+
+    const totalGB = (diagnostics.hardware.totalRAM / (1024 * 1024 * 1024)).toFixed(1);
+    const freeGB = (diagnostics.hardware.freeRAM / (1024 * 1024 * 1024)).toFixed(1);
+    console.log(`  RAM: ${totalGB} GB total, ${freeGB} GB free`);
+
+    if (diagnostics.hardware.gpu) {
+      const gpuMemGB = (diagnostics.hardware.gpu.memory / (1024 * 1024 * 1024)).toFixed(1);
+      console.log(`  GPU: ${diagnostics.hardware.gpu.vendor} ${diagnostics.hardware.gpu.name} (${gpuMemGB} GB)`);
+    } else {
+      console.log(`  GPU: None`);
+    }
+
+    console.log(`  Platform: ${diagnostics.hardware.platform} (${diagnostics.hardware.arch})`);
+
+    if (verbose) {
+      console.log(chalk.gray(`  Detected at: ${diagnostics.hardware.detectedAt.toLocaleString()}`));
+    }
+  }
+
+  // Configuration section
+  if (diagnostics.config) {
+    console.log('');
+    console.log(chalk.bold('Configuration:'));
+    console.log(`  Profile: ${diagnostics.config.profile.name}`);
+    console.log(`  Model: ${diagnostics.config.profile.model}`);
+    console.log(`  Dimensions: ${diagnostics.config.profile.dimensions}`);
+    console.log(`  Backend: ${diagnostics.config.profile.backend}`);
+    console.log(`  Device: ${diagnostics.config.profile.device}`);
+    console.log(`  Quantization: ${diagnostics.config.profile.quantization}`);
+    console.log(`  Batch Size: ${diagnostics.config.profile.batchSize}`);
+
+    if (verbose) {
+      console.log(chalk.gray(`  Version: ${diagnostics.config.version}`));
+      console.log(chalk.gray(`  Updated: ${diagnostics.config.updatedAt.toLocaleString()}`));
+    }
+  }
+
+  // Model status section
+  if (diagnostics.modelStatus) {
+    console.log('');
+    console.log(chalk.bold('Model Status:'));
+
+    if (diagnostics.modelStatus.cached) {
+      console.log(chalk.green(`  ✓ Model cached locally`));
+      if (diagnostics.modelStatus.size) {
+        const sizeMB = (diagnostics.modelStatus.size / (1024 * 1024)).toFixed(2);
+        console.log(`  Size: ${sizeMB} MB`);
+      }
+      if (verbose) {
+        console.log(chalk.gray(`  Path: ${diagnostics.modelStatus.path}`));
+      }
+    } else {
+      console.log(chalk.yellow(`  ⚠ Model not cached (will download on first use)`));
+    }
+
+    if (diagnostics.modelStatus.compatible) {
+      console.log(chalk.green(`  ✓ Model compatible with hardware`));
+    } else {
+      console.log(chalk.red(`  ✗ Model incompatible with hardware`));
+    }
+  }
+
+  // ONNX Runtime section
+  if (diagnostics.onnxRuntime) {
+    console.log('');
+    console.log(chalk.bold('ONNX Runtime:'));
+    console.log(`  Available Providers: [${diagnostics.onnxRuntime.availableProviders.join(', ')}]`);
+    console.log(`  Active Provider: ${diagnostics.onnxRuntime.activeProvider}`);
+  }
+
+  // Cache section
+  if (diagnostics.cache) {
+    console.log('');
+    console.log(chalk.bold('Cache:'));
+    console.log(`  Location: ${diagnostics.cache.location}`);
+
+    const sizeMB = (diagnostics.cache.size / (1024 * 1024)).toFixed(2);
+    console.log(`  Size: ${sizeMB} MB`);
+    console.log(`  Entries: ${diagnostics.cache.entries} embeddings`);
+
+    if (diagnostics.cache.entries > 0) {
+      const hitRatePercent = (diagnostics.cache.hitRate * 100).toFixed(1);
+      console.log(`  Hit Rate: ${hitRatePercent}% (last 1000 operations)`);
+    }
+  }
+
+  // Recent fallbacks section
+  if (diagnostics.config && diagnostics.config.fallbackHistory.length > 0) {
+    console.log('');
+    console.log(chalk.bold('Recent Fallbacks:'));
+
+    const recentFallbacks = diagnostics.config.fallbackHistory.slice(-5); // Last 5
+    for (const fallback of recentFallbacks) {
+      const timeStr = fallback.timestamp.toLocaleString();
+      const actionStr = fallback.action.replace('_', ' ');
+      console.log(chalk.yellow(`  • [${timeStr}] ${actionStr}: ${fallback.reason}`));
+
+      if (verbose) {
+        if (fallback.from) {
+          console.log(chalk.gray(`    From: ${JSON.stringify(fallback.from)}`));
+        }
+        if (fallback.to) {
+          console.log(chalk.gray(`    To: ${JSON.stringify(fallback.to)}`));
+        }
+        console.log(chalk.gray(`    Success: ${fallback.success}`));
+      }
+    }
+  } else if (diagnostics.config) {
+    console.log('');
+    console.log(chalk.bold('Recent Fallbacks:'));
+    console.log(chalk.green('  None'));
+  }
+
+  // Recommendations section
+  if (diagnostics.recommendations.length > 0) {
+    console.log('');
+    console.log(chalk.bold('Recommendations:'));
+    for (const recommendation of diagnostics.recommendations) {
+      if (recommendation.includes('optimal')) {
+        console.log(chalk.green(`  ✓ ${recommendation}`));
+      } else {
+        console.log(chalk.yellow(`  → ${recommendation}`));
+      }
+    }
   }
 }
