@@ -179,9 +179,9 @@
 
 **Purpose**: Implement ONNX backend, quantization utilities, and performance optimizations
 
-- [ ] T076 [P] Implement ONNXBackend in src/lib/embedding/backends/ONNXBackend.ts (initialize ONNX Runtime with execution providers, configure quantization, handle device selection)
-- [ ] T077 [P] Implement PyTorchBackend stub in src/lib/embedding/backends/PyTorchBackend.ts (basic structure for future PyTorch support, throw not implemented error)
-- [ ] T078 [P] Implement QuantizationUtils in src/lib/embedding/quantization/QuantizationUtils.ts (helper functions for int8/int4/fp16/fp32 configuration, validate quantization compatibility)
+- [X] T076 [P] Implement ONNXBackend in src/lib/embedding/backends/ONNXBackend.ts (initialize ONNX Runtime with execution providers, configure quantization, handle device selection)
+- [X] T077 [P] Implement PyTorchBackend stub in src/lib/embedding/backends/PyTorchBackend.ts (basic structure for future PyTorch support, throw not implemented error)
+- [X] T078 [P] Implement QuantizationUtils in src/lib/embedding/quantization/QuantizationUtils.ts (helper functions for int8/int4/fp16/fp32 configuration, validate quantization compatibility)
 - [ ] T079 Implement batch processing with length sorting in src/services/embedding/EmbeddingService.ts (sort texts by length to minimize padding, process in batches, restore original order)
 - [ ] T080 Implement streaming architecture for large file sets in src/services/embedding/EmbeddingService.ts (process files in bounded memory pool using p-limit, stream database writes, add GC hints every 100 files)
 - [ ] T081 Add progress reporting with ora spinner in src/services/embedding/ModelLoader.ts (show model download progress, display loading percentage)
