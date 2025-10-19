@@ -5,6 +5,16 @@
 **Status**: Draft
 **Input**: User description: "Expose an MCP server with tools: search(q, dir?, lang?, k?), find_def(symbol), find_refs(symbol), callers(symbol), callees(symbol), open_at(path,line), refresh(paths?), and symbols(path?). Transport: stdio. Responses return anchors and short previews. Include simple auth toggle (off by default). Acceptance: works from Claude Code tool picker."
 
+## Clarifications
+
+### Session 2025-10-19
+
+- Q: What wire protocol format should the server use for stdio communication? → A: JSON-RPC 2.0 via MCP SDK (Model Context Protocol standard)
+- Q: What are the specific limits for maximum results and preview line counts to prevent overwhelming clients? → A: 100 results max, 10 lines preview (balanced approach)
+- Q: What authentication mechanism should be used for the optional auth toggle? → A: Environment variable API key (e.g., CODE_INDEX_AUTH_TOKEN) checked on connection
+- Q: How many clients can connect simultaneously via stdio transport? → A: Single client via stdio; server instance serves one client; concurrent requests from that client handled asynchronously
+- Q: How should the server respond when the index is corrupted or unavailable? → A: Return JSON-RPC error (-32002: index unavailable) for affected operations; remain running to allow refresh/rebuild
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Basic Code Search Integration (Priority: P1)
@@ -105,15 +115,15 @@ An administrator wants to restrict access to the code intelligence server in sha
 
 ### Edge Cases
 
-- What happens when searching for extremely common terms that would return thousands of results?
+- **Extremely common search terms**: Server returns top 100 most relevant results ranked by relevance score when query would match thousands of results
+- **Very large files**: Code previews are limited to 10 lines regardless of file size; if match occurs in a file with >10,000 lines, preview shows context window around match location only
+- **Invalid authentication credentials**: When CODE_INDEX_AUTH_TOKEN is set and client provides missing or mismatched token, server returns JSON-RPC error response with code -32001 (authentication failed) and denies access to all tool functions
+- **Multiple clients**: Each server instance serves exactly one client via stdio; for multiple clients, spawn separate server instances with independent stdio channels
+- **Index corrupted or unavailable**: Server returns JSON-RPC error with code -32002 (index unavailable) for operations requiring database access; server remains running to allow client to trigger refresh/rebuild operations
 - How does the server handle malformed or invalid symbol names?
-- What happens when multiple clients connect simultaneously?
-- How does the server respond when the index is corrupted or unavailable?
 - What happens when file paths contain special characters or spaces?
-- How does the server handle very large files that might overwhelm response limits?
 - What happens when a client disconnects unexpectedly during a long-running operation?
 - How does the server handle circular dependencies in call graphs?
-- What happens when authentication credentials are invalid or expired?
 
 ## Requirements *(mandatory)*
 
@@ -128,24 +138,25 @@ An administrator wants to restrict access to the code intelligence server in sha
 - **FR-007**: Server MUST support index refresh for specified paths or entire codebase
 - **FR-008**: Server MUST provide symbol listing for files or codebase overview
 - **FR-009**: All responses MUST include file path anchors and code preview snippets
-- **FR-010**: Server MUST communicate via standard input/output streams
-- **FR-011**: Server MUST support concurrent client requests without blocking
-- **FR-012**: Server MUST provide optional authentication with configurable on/off toggle
-- **FR-013**: Authentication MUST be disabled by default for ease of use
+- **FR-010**: Server MUST communicate via standard input/output streams using JSON-RPC 2.0 protocol format following MCP SDK specifications
+- **FR-011**: Server MUST handle concurrent requests from a single client asynchronously without blocking (one client per server instance via stdio)
+- **FR-012**: Server MUST provide optional authentication via environment variable API key (CODE_INDEX_AUTH_TOKEN) with configurable on/off toggle
+- **FR-013**: Authentication MUST be disabled by default for ease of use; enabled only when CODE_INDEX_AUTH_TOKEN environment variable is set
 - **FR-014**: Server MUST handle missing or invalid parameters gracefully with clear error messages
 - **FR-015**: Server MUST work with AI assistant tool integration interfaces
 - **FR-016**: Response format MUST be consistent across all tool functions
 - **FR-017**: Server MUST validate all input parameters before processing
-- **FR-018**: Server MUST limit response sizes to prevent overwhelming clients
+- **FR-018**: Server MUST limit response sizes to maximum 100 results per query with 10 lines of code preview per result
+- **FR-019**: Server MUST return JSON-RPC error code -32002 when index is corrupted or unavailable and remain operational to allow recovery operations
 
 ### Key Entities
 
 - **Tool Function**: A callable operation exposed by the server (search, find_def, etc.)
 - **Code Anchor**: A precise location in code specified by file path and line number
-- **Code Preview**: A snippet of code surrounding a result for context
+- **Code Preview**: A snippet of code surrounding a result for context (maximum 10 lines)
 - **Symbol**: An identifier in code (function, class, variable, etc.) that can be navigated
 - **Call Relationship**: Connection between functions showing caller/callee relationships
-- **Search Result**: A match containing anchor, preview, and relevance information
+- **Search Result**: A match containing anchor, preview, and relevance information (maximum 100 per query)
 - **Authentication Token**: Optional credential for server access when security is enabled
 
 ## Success Criteria *(mandatory)*
@@ -156,7 +167,7 @@ An administrator wants to restrict access to the code intelligence server in sha
 - **SC-002**: Search queries return results within 500ms for codebases up to 100,000 files
 - **SC-003**: Symbol navigation functions respond within 200ms for typical queries
 - **SC-004**: 95% of symbol lookups return accurate definitions and references
-- **SC-005**: Server handles 50+ concurrent client requests without performance degradation
+- **SC-005**: Server handles 50+ concurrent requests from its connected client asynchronously without performance degradation
 - **SC-006**: Index refresh completes within 10 seconds for incremental updates
 - **SC-007**: All responses include properly formatted anchors and previews 100% of the time
 - **SC-008**: Authentication when enabled blocks 100% of unauthorized access attempts
@@ -165,12 +176,15 @@ An administrator wants to restrict access to the code intelligence server in sha
 
 ## Assumptions
 
-- The codebase is already indexed with searchable content and symbol information
-- AI assistant tools support standard protocol communication interfaces
+- The codebase is already indexed with searchable content and symbol information (if index is unavailable, server returns error -32002 and allows recovery)
+- AI assistant tools support MCP (Model Context Protocol) with JSON-RPC 2.0 format
+- MCP SDK is available and compatible with the TypeScript/Node.js environment
+- SQLite database integrity can be checked without causing server crash; corruption detection is possible
 - File system provides stable paths that don't change during server operation
 - Code files are text-based and readable
 - Symbol extraction and call graph analysis are already implemented
 - Client tools can handle and display code anchors and previews appropriately
-- Standard input/output streams are available for communication
-- Authentication mechanism (if enabled) has a simple token or key-based system
-- Response size limits are reasonable for typical code snippets and search results
+- Standard input/output streams are available for communication (one client per server instance)
+- Multiple client support achieved by spawning separate server instances rather than multiplexing stdio
+- Authentication when enabled uses CODE_INDEX_AUTH_TOKEN environment variable; clients pass token via MCP protocol metadata/headers
+- Response size limits (100 results, 10 line previews) are reasonable for typical code snippets and search results
