@@ -46,6 +46,7 @@ describe('ConfigurationService', () => {
           ...DEFAULT_RANKING_CONFIG.fusion,
           alpha: 0.7,
           beta: 0.3,
+          gamma: 0, // Set gamma=0 so sum = 1.0
         }
       };
 
@@ -262,6 +263,7 @@ describe('ConfigurationService', () => {
           ...DEFAULT_RANKING_CONFIG.fusion,
           alpha: 0.95,
           beta: 0.05,
+          gamma: 0, // Set gamma=0 so sum = 1.0
         }
       };
 
@@ -280,6 +282,7 @@ describe('ConfigurationService', () => {
           ...DEFAULT_RANKING_CONFIG.fusion,
           alpha: 0.05,
           beta: 0.95,
+          gamma: 0, // Set gamma=0 so sum = 1.0
         }
       };
 
@@ -343,6 +346,8 @@ describe('ConfigurationService', () => {
         fusion: {
           ...DEFAULT_RANKING_CONFIG.fusion,
           alpha: 0.8,
+          beta: 0.2,
+          gamma: 0, // Set gamma=0 so sum = 1.0
         }
       };
 

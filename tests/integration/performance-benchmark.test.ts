@@ -138,9 +138,7 @@ function createBenchmarkDatabase(
       modified_at INTEGER
     );
 
-    CREATE TABLE IF NOT EXISTS search (
-      content TEXT
-    ) USING fts5(content, tokenize='porter');
+    CREATE VIRTUAL TABLE IF NOT EXISTS search USING fts5(content, tokenize='porter');
 
     CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
   `);
