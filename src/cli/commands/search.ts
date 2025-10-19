@@ -10,14 +10,14 @@ import { PathDiversifier } from '../../services/path-diversifier.js';
 import { TieBreaker } from '../../services/tie-breaker.js';
 import { PerformanceMonitor } from '../../services/performance-monitor.js';
 import { ConfigurationService } from '../../services/configuration-service.js';
-// import { VectorStorageService } from '../../services/vector-storage.js'; // TODO: Uncomment when vector search is implemented
+import { VectorStorageService } from '../../services/vector-storage.js';
+import { OnnxEmbeddingAdapter } from '../../services/embedding/onnx-adapter.js';
 import { MIN_QUERY_LENGTH, MAX_QUERY_LENGTH } from '../../constants/ranking-constants.js';
 import { hasExtremeWeights } from '../../lib/ranking-utils.js';
-import type { RankingCandidate } from '../../models/ranking-candidate.js';
-// import type { SymbolType } from '../../models/ranking-candidate.js'; // TODO: Uncomment when vector search is implemented
+import type { RankingCandidate, SymbolType } from '../../models/ranking-candidate.js';
 import type { HybridSearchResult } from '../../models/hybrid-search-result.js';
 import type { SearchResult } from '../../models/search-result.js';
-// import type { EmbeddingQueryResult } from '../../models/embedding-vector.js'; // TODO: Uncomment when vector search is implemented
+import type { EmbeddingQueryResult } from '../../models/embedding-vector.js';
 import type { RankingConfig } from '../../models/ranking-config.js';
 
 interface SearchCommandOptions {
@@ -61,7 +61,7 @@ export function createSearchCommand(): Command {
     .option('--beta <weight>', 'Override vector weight (0.0-1.0)')
     .option('--gamma <weight>', 'Override tie-breaker weight (0.0-1.0)')
     .option('--config <path>', 'Use custom ranking configuration file')
-    .action((query: string, options: SearchCommandOptions) => {
+    .action(async (query: string, options: SearchCommandOptions) => {
       const cwd = process.cwd();
       const codeIndexDir = join(cwd, '.codeindex');
       const formatter = new OutputFormatter();
@@ -125,7 +125,7 @@ export function createSearchCommand(): Command {
 
         // Handle hybrid search if requested
         if (options.hybrid) {
-          handleHybridSearch(query, options, database, formatter);
+          await handleHybridSearch(query, options, database, formatter);
           database.close();
           return;
         }
@@ -260,12 +260,12 @@ function escapeRegex(str: string): string {
 /**
  * Handle hybrid search request
  */
-function handleHybridSearch(
+async function handleHybridSearch(
   query: string,
   options: SearchCommandOptions,
   database: DatabaseService,
   formatter: OutputFormatter
-): void {
+): Promise<void> {
   // Validate query length
   if (query.length < MIN_QUERY_LENGTH) {
     formatter.error('Query too short', {
@@ -388,7 +388,7 @@ function handleHybridSearch(
     const lexicalCandidates: RankingCandidate[] = enableLexical ? getLexicalCandidates(query, database, config) : [];
     performanceMonitor.stopTimer('lexicalSearch');
 
-    const vectorCandidates: RankingCandidate[] = enableVector ? getVectorCandidates(query, database, config) : [];
+    const vectorCandidates: RankingCandidate[] = enableVector ? await getVectorCandidates(query, database, config) : [];
     performanceMonitor.stopTimer('vectorSearch');
 
     // Track fallback mode
@@ -561,49 +561,43 @@ function formatHybridResultsJSON(result: HybridSearchResult): void {
 
 /**
  * Helper: Map chunk type to symbol type for tie-breaking
- *
- * TODO: Uncomment when vector search is implemented
- *
- * function mapChunkTypeToSymbolType(chunkType: string | null): SymbolType {
- *   if (!chunkType) return 'unknown';
- *
- *   const mapping: Record<string, SymbolType> = {
- *     'function': 'function',
- *     'class': 'class',
- *     'method': 'method',
- *     'interface': 'interface',
- *     'type': 'type',
- *     'variable': 'variable',
- *     'constant': 'constant',
- *     'property': 'property',
- *     'comment': 'comment',
- *   };
- *
- *   return mapping[chunkType] || 'unknown';
- * }
  */
+function mapChunkTypeToSymbolType(chunkType: string | null): SymbolType {
+  if (!chunkType) return 'unknown';
+
+  const mapping: Record<string, SymbolType> = {
+    'function': 'function',
+    'class': 'class',
+    'method': 'method',
+    'interface': 'interface',
+    'type': 'type',
+    'variable': 'variable',
+    'constant': 'constant',
+    'property': 'property',
+    'comment': 'comment',
+  };
+
+  return mapping[chunkType] || 'unknown';
+}
 
 /**
  * Helper: Get chunk metadata by ID
- *
- * TODO: Uncomment when vector search is implemented
- *
- * function getChunkById(chunkId: string, database: DatabaseService): any | null {
- *   try {
- *     const stmt = database.prepare(`
- *       SELECT
- *         id, file_id, name, content, start_line, end_line,
- *         chunk_type, language
- *       FROM chunks
- *       WHERE id = ?
- *     `);
- *     return stmt.get(chunkId);
- *   } catch (error) {
- *     console.warn(`Failed to get chunk ${chunkId}:`, error);
- *     return null;
- *   }
- * }
  */
+function getChunkById(chunkId: string, database: DatabaseService): any | null {
+  try {
+    const stmt = database.prepare(`
+      SELECT
+        id, file_id, name, content, start_line, end_line,
+        chunk_type, language
+      FROM chunks
+      WHERE id = ?
+    `);
+    return stmt.get(chunkId);
+  } catch (error) {
+    console.warn(`Failed to get chunk ${chunkId}:`, error);
+    return null;
+  }
+}
 
 /**
  * Helper: Convert SearchResult[] to RankingCandidate[]
@@ -645,52 +639,49 @@ function convertSearchResultsToCandidates(
 
 /**
  * Helper: Convert EmbeddingQueryResult[] to RankingCandidate[]
- *
- * TODO: Uncomment when vector search is implemented
- *
- * function convertVectorResultsToCandidates(
- *   results: EmbeddingQueryResult[],
- *   database: DatabaseService
- * ): RankingCandidate[] {
- *   const candidates: RankingCandidate[] = [];
- *
- *   for (let rank = 0; rank < results.length; rank++) {
- *     const result = results[rank];
- *     if (!result) continue;
- *
- *     // Get chunk metadata from database
- *     const chunk = getChunkById(result.chunk_id, database);
- *     if (!chunk) continue;
- *
- *     // Get file entry to get file metadata
- *     const fileEntry = database.getEntryByPath(chunk.file_id); // Note: file_id might be path
- *     if (!fileEntry) {
- *       // Try treating file_id as actual ID
- *       const stmt = database.prepare('SELECT * FROM code_entries WHERE id = ?');
- *       const file = stmt.get(chunk.file_id);
- *       if (!file) continue;
- *     }
- *
- *     candidates.push({
- *       source: 'vector',
- *       sourceRank: rank + 1,
- *       sourceScore: result.similarity || 0, // Cosine similarity [0,1]
- *       fileId: chunk.file_id || '',
- *       filePath: fileEntry?.path || chunk.file_id || '', // Fallback to file_id if path not found
- *       lineNumber: chunk.start_line || 1,
- *       columnNumber: undefined,
- *       snippet: (chunk.content || '').substring(0, 200), // Preview
- *       symbolName: chunk.name || undefined,
- *       symbolType: mapChunkTypeToSymbolType(chunk.chunk_type),
- *       language: chunk.language || undefined,
- *       fileSize: fileEntry?.size || 0,
- *       lastModified: fileEntry?.fileModifiedAt || new Date()
- *     });
- *   }
- *
- *   return candidates;
- * }
  */
+function convertVectorResultsToCandidates(
+  results: EmbeddingQueryResult[],
+  database: DatabaseService
+): RankingCandidate[] {
+  const candidates: RankingCandidate[] = [];
+
+  for (let rank = 0; rank < results.length; rank++) {
+    const result = results[rank];
+    if (!result) continue;
+
+    // Get chunk metadata from database
+    const chunk = getChunkById(result.chunk_id, database);
+    if (!chunk) continue;
+
+    // Get file entry to get file metadata
+    const fileEntry = database.getEntryByPath(chunk.file_id); // Note: file_id might be path
+    if (!fileEntry) {
+      // Try treating file_id as actual ID
+      const stmt = database.prepare('SELECT * FROM code_entries WHERE id = ?');
+      const file = stmt.get(chunk.file_id);
+      if (!file) continue;
+    }
+
+    candidates.push({
+      source: 'vector',
+      sourceRank: rank + 1,
+      sourceScore: result.similarity || 0, // Cosine similarity [0,1]
+      fileId: chunk.file_id || '',
+      filePath: fileEntry?.path || chunk.file_id || '', // Fallback to file_id if path not found
+      lineNumber: chunk.start_line || 1,
+      columnNumber: undefined,
+      snippet: (chunk.content || '').substring(0, 200), // Preview
+      symbolName: chunk.name || undefined,
+      symbolType: mapChunkTypeToSymbolType(chunk.chunk_type),
+      language: chunk.language || undefined,
+      fileSize: fileEntry?.size || 0,
+      lastModified: fileEntry?.fileModifiedAt || new Date()
+    });
+  }
+
+  return candidates;
+}
 
 /**
  * Get lexical search candidates from SearcherService
@@ -718,24 +709,81 @@ function getLexicalCandidates(
 /**
  * Get vector search candidates from VectorStorageService
  *
- * Note: Currently returns empty array as it requires:
- * 1. Embedding generation for the query
- * 2. Model loading and inference
- * This will be completed in a follow-up implementation
+ * Generates an embedding for the query and searches for similar code chunks
+ * using vector similarity (cosine distance). Falls back to empty array on error.
  */
-function getVectorCandidates(
-  _query: string,
-  _database: DatabaseService,
-  _config: RankingConfig
-): RankingCandidate[] {
-  // TODO: Implement vector search integration
-  // Requires:
-  // 1. Initialize embedding service
-  // 2. Generate query embedding
-  // 3. Query vector storage
-  // 4. Convert results to candidates
+async function getVectorCandidates(
+  query: string,
+  database: DatabaseService,
+  config: RankingConfig
+): Promise<RankingCandidate[]> {
+  try {
+    // Get raw database instance for VectorStorageService
+    const db = database.getRawDatabase();
 
-  // Placeholder: Return empty array for now
-  // This allows hybrid search to fall back to lexical-only mode
-  return [];
+    // Initialize vector storage service
+    const vectorStorage = new VectorStorageService(db);
+
+    // Initialize ONNX embedding adapter
+    const adapter = new OnnxEmbeddingAdapter(
+      {
+        type: 'onnx',
+        name: 'Local: all-MiniLM-L6-v2',
+        modelPath: '.codeindex/models/all-MiniLM-L6-v2.onnx',
+        useGpu: false,
+        threads: 4
+      },
+      'all-MiniLM-L6-v2',
+      384,
+      '1.0'
+    );
+
+    // Initialize adapter (loads model)
+    const initResult = await adapter.initialize();
+    if (initResult.isErr()) {
+      console.warn('Vector search unavailable:', initResult.error.message);
+      return [];
+    }
+
+    // Generate query embedding
+    const embedResult = await adapter.embed([query]);
+    if (embedResult.isErr()) {
+      console.warn('Failed to generate query embedding:', embedResult.error.message);
+      await adapter.dispose();
+      return [];
+    }
+
+    // Extract embedding vector from batch result
+    const firstVector = embedResult.value.vectors[0];
+    if (!firstVector) {
+      console.warn('No embedding vector generated for query');
+      await adapter.dispose();
+      return [];
+    }
+    const queryVector = new Float32Array(firstVector);
+
+    // Find similar vectors
+    const similarResult = vectorStorage.findSimilar(
+      queryVector,
+      adapter.id, // 'onnx:all-MiniLM-L6-v2'
+      config.performance.candidateLimit // Default: 200
+    );
+
+    if (similarResult.isErr()) {
+      console.warn('Vector search failed:', similarResult.error.message);
+      await adapter.dispose();
+      return [];
+    }
+
+    // Convert to ranking candidates
+    const candidates = convertVectorResultsToCandidates(similarResult.value, database);
+
+    // Cleanup adapter resources
+    await adapter.dispose();
+
+    return candidates;
+  } catch (error) {
+    console.warn('Vector search failed:', error);
+    return [];
+  }
 }

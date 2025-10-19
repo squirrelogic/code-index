@@ -79,6 +79,16 @@ export class DatabaseService {
   }
 
   /**
+   * Gets the raw database instance for advanced operations
+   * (e.g., VectorStorageService, direct sqlite-vec access)
+   * @returns Raw better-sqlite3 database instance
+   */
+  getRawDatabase(): Database.Database {
+    if (!this.db) throw new Error('Database not connected');
+    return this.db;
+  }
+
+  /**
    * Initializes database schema
    */
   private initializeSchema(): void {
