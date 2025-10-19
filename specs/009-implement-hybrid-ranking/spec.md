@@ -5,6 +5,16 @@
 **Status**: Draft
 **Input**: User description: "Implement hybrid ranking: BM25 (FTS5) + vector similarity + small tie-breakers (identifier/path/lang). Pipeline: lexical@200 ∪ vector@200 → fused top-k with path diversification. Parameters α/β/γ configurable. Output: file:line anchors with previews and scores. SLA: <300ms for top-10 on medium repos."
 
+## Clarifications
+
+### Session 2025-01-19
+
+- Q: When one ranking component (lexical or vector) returns no results, how should the system behave? → A: Fallback to available component - use only lexical or only vector results with full weight
+- Q: How should path diversification work when all matches are in a single file? → A: Return all relevant matches - skip diversification when single-file concentration is legitimate
+- Q: How should the system handle very long queries (full paragraphs)? → A: Accept up to 2000 chars - process long queries but cap at a practical maximum
+- Q: What happens when configuration parameters are set to extreme values (e.g., α=0 or β=1)? → A: Accept with warning - allow extreme values but log warnings about degraded behavior
+- Q: What happens when the system cannot meet the 300ms SLA due to repository size or query complexity? → A: Return partial results - provide best-effort results with performance warning
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Basic Hybrid Search (Priority: P1)
@@ -89,13 +99,14 @@ A system administrator wants to monitor search performance and ensure the system
 
 ### Edge Cases
 
-- What happens when one ranking component (lexical or vector) returns no results?
+- **Component Returns No Results**: When one ranking component (lexical or vector) returns no results, the system falls back to using only the available component's results with full weight, ensuring users still receive relevant results
+- **Single-File Concentration**: When all relevant matches are legitimately in a single file, path diversification is skipped to return all relevant results rather than artificially limiting them
+- **Long Queries**: The system accepts queries up to 2000 characters to support natural language descriptions and exploratory searches, rejecting queries that exceed this practical maximum
+- **Extreme Configuration Values**: When parameters are set to extreme values (e.g., α=0 for vector-only, β=1 for maximum lexical weight), the system accepts them but logs warnings about potential degraded hybrid behavior to support testing and specialized use cases
+- **SLA Violation**: When the system cannot meet the 300ms SLA due to repository size or query complexity, it returns the best-effort partial results available with a performance warning, ensuring users receive useful results rather than an error
 - How does the system handle queries that are purely navigational (searching for a specific file/function name)?
 - What happens when the lexical and vector components return completely disjoint result sets?
-- How does the system handle very short queries (1-2 characters) or very long queries (full paragraphs)?
-- What happens when configuration parameters are set to extreme values (e.g., α=0 or β=1)?
-- How does path diversification work when all matches are in a single file?
-- What happens when the system cannot meet the 300ms SLA due to repository size?
+- How does the system handle very short queries (1-2 characters)?
 - How does the system handle special characters or code syntax in search queries?
 
 ## Requirements *(mandatory)*
@@ -112,18 +123,20 @@ A system administrator wants to monitor search performance and ensure the system
 - **FR-008**: System MUST return top-10 results within 300ms for medium-sized repositories
 - **FR-009**: System MUST support tie-breaking using identifier matching, file paths, and language indicators
 - **FR-010**: Configuration parameters MUST be adjustable without system restart
-- **FR-011**: System MUST handle graceful degradation when one ranking component fails
+- **FR-011**: System MUST fallback to using only the available component (lexical or vector) with full weight when the other component returns no results or fails
 - **FR-012**: System MUST provide consistent result ordering for identical queries
 - **FR-013**: System MUST support both keyword and natural language queries
 - **FR-014**: Results MUST be deduplicated when the same code appears in multiple ranking sources
-- **FR-015**: System MUST limit results per file to ensure diversity
+- **FR-015**: System MUST limit results per file to ensure diversity across multiple files, but MUST skip this limit when all relevant matches legitimately exist in a single file
 - **FR-016**: System MUST expose performance metrics for monitoring
-- **FR-017**: System MUST validate configuration parameters are within acceptable ranges
+- **FR-017**: System MUST accept configuration parameters including extreme values (e.g., α=0, β=1) but MUST log warnings when values may degrade hybrid ranking behavior
 - **FR-018**: System MUST maintain ranking quality even with partial component results
+- **FR-019**: System MUST accept search queries up to 2000 characters and reject queries exceeding this limit with a clear error message
+- **FR-020**: System MUST return best-effort partial results with a performance warning when unable to meet the 300ms SLA, rather than failing with an error
 
 ### Key Entities
 
-- **Search Query**: User's input text for finding relevant code, can be keywords or natural language
+- **Search Query**: User's input text for finding relevant code, can be keywords or natural language, maximum 2000 characters
 - **Lexical Candidate**: Result from text-based search with associated relevance score
 - **Vector Candidate**: Result from semantic similarity search with similarity score
 - **Ranked Result**: Final merged result with combined score, file location, line number, preview, and metadata
