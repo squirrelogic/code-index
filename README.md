@@ -6,6 +6,7 @@ A fast, offline TypeScript/Node.js CLI tool for local code indexing and search u
 
 - 🚀 **Fast Indexing** - Process 1,000+ files per second
 - 🔍 **Instant Search** - Full-text and regex search with <100ms response time
+- 🧠 **Hybrid Search** - Combines lexical (BM25) + semantic (vector) search with configurable fusion
 - 💾 **Offline First** - All data stored locally in SQLite
 - 🔄 **Incremental Updates** - Refresh only changed files
 - 👀 **File Watcher** - Real-time index updates with debounced change detection
@@ -101,6 +102,15 @@ Search the indexed codebase for patterns.
 - `-c, --case-sensitive` - Perform case-sensitive search
 - `-l, --limit <number>` - Limit number of results (default: 20)
 - `-j, --json` - Output results in JSON format
+- `--hybrid` - Enable hybrid search (combines lexical + semantic ranking)
+- `--alpha <number>` - Lexical weight for hybrid search (0.0-1.0, default: 0.5)
+- `--beta <number>` - Vector weight for hybrid search (0.0-1.0, default: 0.4)
+- `--gamma <number>` - Tie-breaker weight for hybrid search (0.0-1.0, default: 0.1)
+- `--config <path>` - Custom ranking config file path
+- `--lexical-only` - Use only lexical (BM25) search
+- `--vector-only` - Use only vector (semantic) search
+- `--no-diversification` - Disable path diversification in results
+- `--explain` - Show detailed score breakdown for each result
 
 **Examples:**
 ```bash
@@ -115,6 +125,18 @@ code-index search "import" --limit 10
 
 # JSON output for scripting
 code-index search "error" --json | jq '.results[].path'
+
+# Hybrid search (combines lexical + semantic)
+code-index search --hybrid "user authentication"
+
+# Adjust fusion weights (prioritize exact matches)
+code-index search --hybrid "API endpoint" --alpha 0.7 --beta 0.3
+
+# Show detailed score explanations
+code-index search --hybrid "error handling" --explain
+
+# Use custom ranking configuration
+code-index search --hybrid "database query" --config ./my-ranking-config.json
 ```
 
 ### `code-index refresh`
@@ -227,6 +249,23 @@ code-index diagnose --fix
 code-index diagnose --report
 ```
 
+### `code-index metrics`
+
+View collected search performance metrics.
+
+**Options:**
+- `--json` - Output metrics in JSON format
+- `--log-dir <path>` - Path to logs directory (default: .codeindex/logs)
+
+**Examples:**
+```bash
+# View performance statistics
+code-index metrics
+
+# Export metrics as JSON
+code-index metrics --json > performance-report.json
+```
+
 ### `code-index uninstall`
 
 Remove all code-index artifacts from your project.
@@ -262,6 +301,87 @@ Code-index automatically detects and tags files with their programming language 
 - Go (`.go`)
 - Rust (`.rs`)
 - And 40+ more languages
+
+## Hybrid Search
+
+Hybrid search combines the precision of lexical search (BM25) with the semantic understanding of vector search to deliver superior code search results.
+
+### How It Works
+
+1. **Dual Retrieval**: Fetches top-200 candidates from both lexical (exact/fuzzy text matches) and vector (semantic similarity) components in parallel
+2. **Fusion**: Combines rankings using Reciprocal Rank Fusion (RRF) with configurable weights (α, β, γ)
+3. **Diversification**: Applies path-based diversification to ensure results span multiple files/directories
+4. **Tie-Breaking**: Uses advanced heuristics (symbol type, path priority, language match) to order similarly-scored results
+
+### Usage Examples
+
+```bash
+# Basic hybrid search
+code-index search --hybrid "authentication logic"
+
+# Prioritize exact matches (increase lexical weight)
+code-index search --hybrid "JWT token" --alpha 0.7 --beta 0.3
+
+# Prioritize semantic matches (increase vector weight)
+code-index search --hybrid "how to handle errors" --alpha 0.3 --beta 0.6
+
+# Explain rankings
+code-index search --hybrid "database connection" --explain
+```
+
+### Configuration File
+
+Create `.codeindex/ranking-config.json` to customize hybrid search behavior:
+
+```json
+{
+  "version": "1.0",
+  "fusion": {
+    "alpha": 0.5,      // Lexical weight (exact text matches)
+    "beta": 0.4,       // Vector weight (semantic similarity)
+    "gamma": 0.1,      // Tie-breaker weight
+    "rrfK": 60         // RRF constant (higher = less impact of rank position)
+  },
+  "diversification": {
+    "enabled": true,
+    "lambda": 0.7,     // 0.0 = max diversity, 1.0 = pure relevance
+    "maxPerFile": 3    // Max results from single file in top-10
+  },
+  "tieBreakers": {
+    "symbolTypeWeight": 0.3,       // Prioritize functions/classes
+    "pathPriorityWeight": 0.3,     // Prioritize src/ over tests/
+    "languageMatchWeight": 0.2,    // Match query language context
+    "identifierMatchWeight": 0.2   // Exact identifier matches
+  },
+  "performance": {
+    "candidateLimit": 200,  // Candidates per source
+    "timeoutMs": 300,       // SLA target
+    "earlyTerminationTopK": 10
+  }
+}
+```
+
+The configuration file supports hot-reload—changes take effect immediately without restarting.
+
+### Performance Targets
+
+- **Latency**: <300ms for top-10 results on medium repos (10k-50k files)
+- **Memory**: <500MB typical usage
+- **Throughput**: Supports 100 concurrent searches
+
+### When to Use Hybrid vs. Lexical
+
+**Use Hybrid Search When:**
+- Looking for concepts ("error handling patterns")
+- Exploring unfamiliar codebases
+- Natural language queries ("how to validate user input")
+- You want both exact matches AND related code
+
+**Use Lexical Search When:**
+- Searching for specific symbols or strings
+- Regex pattern matching
+- Performance is critical (<100ms requirement)
+- You know exact identifiers or keywords
 
 ## Performance
 
@@ -340,6 +460,32 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
 MIT © [Squirrel Logic]
 
 ## Changelog
+
+### 3.0.0 (Hybrid Search Release)
+- **New Features:**
+  - 🧠 **Hybrid Search** - Combines BM25 lexical + vector semantic search with RRF fusion
+  - Configurable ranking weights (α, β, γ) via CLI flags or config file
+  - Path diversification (MMR-style) for better result distribution
+  - Advanced tie-breaking using symbol type, path priority, and language matching
+  - Performance monitoring with JSON lines logging
+  - Hot-reloadable configuration file (`.codeindex/ranking-config.json`)
+- **Commands:**
+  - `metrics` - View aggregated search performance statistics
+- **Search Options:**
+  - `--hybrid` - Enable hybrid search mode
+  - `--alpha/--beta/--gamma` - Adjust fusion weights
+  - `--lexical-only/--vector-only` - Use single search component
+  - `--no-diversification` - Disable path diversification
+  - `--explain` - Show detailed score breakdown
+  - `--config` - Use custom ranking configuration
+- **Performance:**
+  - <300ms p95 latency for hybrid search on medium repos (10k-50k files)
+  - Parallel candidate retrieval for optimal performance
+  - Early termination and prepared statements
+- **Observability:**
+  - Performance metrics logged to `.codeindex/logs/search-performance.jsonl`
+  - SLA violation tracking and warnings
+  - Fallback mode detection and reporting
 
 ### 2.0.0
 - **New Features:**

@@ -4,6 +4,8 @@
  * @module performance-monitor
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import type { PerformanceMetrics } from '../models/hybrid-search-result.js';
 
 /**
@@ -155,5 +157,53 @@ export class PerformanceMonitor {
    */
   isApproachingTimeout(bufferMs: number = 50): boolean {
     return this.getTotalTime() >= (this.timeoutMs - bufferMs);
+  }
+
+  /**
+   * Log performance metrics to JSON lines file
+   *
+   * Writes to .codeindex/logs/search-performance.jsonl
+   *
+   * @param query - The search query
+   * @param logDir - Log directory (default: '.codeindex/logs')
+   */
+  logMetrics(query: string, logDir: string = '.codeindex/logs'): void {
+    const metrics = this.getMetrics();
+
+    // Prepare log entry
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      query,
+      metrics: {
+        lexicalSearchTimeMs: metrics.lexicalSearchTimeMs,
+        vectorSearchTimeMs: metrics.vectorSearchTimeMs,
+        rankingTimeMs: metrics.rankingTimeMs,
+        totalTimeMs: metrics.totalTimeMs,
+        lexicalCandidates: metrics.lexicalCandidates,
+        vectorCandidates: metrics.vectorCandidates,
+        uniqueCandidates: metrics.uniqueCandidates,
+        slaViolation: metrics.slaViolation,
+        fallbackMode: metrics.fallbackMode || null,
+      },
+    };
+
+    // Determine log level based on SLA violation
+    const logLevel = metrics.slaViolation ? 'WARN' : 'INFO';
+    const logEntryWithLevel = { level: logLevel, ...logEntry };
+
+    try {
+      // Ensure log directory exists
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+
+      // Append to JSON lines file
+      const logPath = path.join(logDir, 'search-performance.jsonl');
+      const logLine = JSON.stringify(logEntryWithLevel) + '\n';
+      fs.appendFileSync(logPath, logLine, 'utf-8');
+    } catch (error) {
+      // Log to stderr if file logging fails (don't crash)
+      console.error('Failed to write performance log:', error);
+    }
   }
 }
