@@ -1,0 +1,543 @@
+# CLI Contract: Hybrid Search Command
+# OpenAPI-style specification for code-index hybrid search CLI interface
+
+cli:
+  name: code-index
+  version: 1.0.0
+  description: Code indexing and search CLI tool
+
+commands:
+  search:
+    description: Search indexed codebase with hybrid ranking
+    usage: code-index search [options] <query>
+
+    arguments:
+      query:
+        type: string
+        required: true
+        description: Search query (keywords or natural language)
+        validation:
+          minLength: 2
+          maxLength: 2000
+        examples:
+          - "parse JSON data"
+          - "authentication middleware"
+          - "function calculateTotal"
+
+    options:
+      --hybrid:
+        type: boolean
+        default: false
+        description: Enable hybrid ranking (BM25 + vector similarity)
+        short: -H
+
+      --lexical-only:
+        type: boolean
+        default: false
+        description: Use only lexical search (disable vector search)
+        conflicts: [--vector-only]
+
+      --vector-only:
+        type: boolean
+        default: false
+        description: Use only vector search (disable lexical search)
+        conflicts: [--lexical-only]
+
+      --limit:
+        type: integer
+        default: 10
+        description: Maximum number of results to return
+        validation:
+          min: 1
+          max: 100
+        short: -n
+
+      --offset:
+        type: integer
+        default: 0
+        description: Pagination offset for results
+        validation:
+          min: 0
+
+      --include:
+        type: string[]
+        description: File patterns to include (glob syntax)
+        examples:
+          - "src/**/*.ts"
+          - "**/*.{js,ts}"
+        repeatable: true
+
+      --exclude:
+        type: string[]
+        description: File patterns to exclude (glob syntax)
+        examples:
+          - "node_modules/**"
+          - "**/*.test.ts"
+        repeatable: true
+
+      --language:
+        type: string[]
+        description: Filter by programming language
+        choices: [typescript, javascript, python, rust, go, java, c, cpp, ruby]
+        repeatable: true
+        short: -l
+
+      --timeout:
+        type: integer
+        description: Search timeout in milliseconds
+        validation:
+          min: 100
+          max: 5000
+        default: 300
+
+      --json:
+        type: boolean
+        default: false
+        description: Output results in JSON format
+        short: -j
+
+      --explain:
+        type: boolean
+        default: false
+        description: Show detailed score breakdown for each result
+
+      --config:
+        type: string
+        description: Path to custom ranking configuration file
+        validation:
+          fileExists: true
+          fileExtension: .json
+
+      # Configuration overrides (optional per-query tuning)
+      --alpha:
+        type: float
+        description: Lexical weight override (0.0 - 1.0)
+        validation:
+          min: 0.0
+          max: 1.0
+
+      --beta:
+        type: float
+        description: Vector weight override (0.0 - 1.0)
+        validation:
+          min: 0.0
+          max: 1.0
+
+      --gamma:
+        type: float
+        description: Tie-breaker weight override (0.0 - 1.0)
+        validation:
+          min: 0.0
+          max: 1.0
+
+      --no-diversification:
+        type: boolean
+        default: false
+        description: Disable path diversification
+
+      --help:
+        type: boolean
+        description: Show help for search command
+        short: -h
+
+    exitCodes:
+      0: Success - results returned
+      1: Error - invalid arguments or configuration
+      2: Error - search failed (database error, timeout exceeded without partial results)
+      3: Warning - partial results returned due to timeout (per FR-020)
+
+    outputs:
+      human-readable:
+        format: text
+        description: Default formatted output for terminal
+        example: |
+          Searching for: "parse JSON data"
+          Found 42 results in 285ms (3 lexical + 5 vector candidates)
+
+          [Score: 0.487] src/services/parser.ts:145
+            Lexical: 0.250 (#3), Vector: 0.220 (#5), Tie: +0.017
+            function parseJSON(data: string): Result<JSONValue, ParseError> {
+
+          [Score: 0.412] src/lib/json-utils.ts:89
+            Lexical: 0.180 (#7), Vector: 0.210 (#6), Tie: +0.022
+            export function deserializeJSON<T>(input: string): T {
+
+          [Score: 0.385] src/models/data-parser.ts:203
+            Lexical: 0.230 (#4), Vector: 0.145 (#12), Tie: +0.010
+            class JSONDataParser implements DataParser {
+
+          ---
+          Showing results 1-3 of 42 (limit: 10, offset: 0)
+
+      json:
+        format: json
+        description: Machine-readable JSON output (--json flag)
+        schema:
+          type: object
+          properties:
+            query:
+              type: string
+              description: Original search query
+            totalFound:
+              type: integer
+              description: Total matches found
+            results:
+              type: array
+              items:
+                type: object
+                properties:
+                  fileId:
+                    type: string
+                  filePath:
+                    type: string
+                  lineNumber:
+                    type: integer
+                  columnNumber:
+                    type: integer
+                    nullable: true
+                  snippet:
+                    type: string
+                  symbolName:
+                    type: string
+                    nullable: true
+                  symbolType:
+                    type: string
+                    nullable: true
+                  language:
+                    type: string
+                    nullable: true
+                  finalScore:
+                    type: number
+                  finalRank:
+                    type: integer
+                  scoreBreakdown:
+                    type: object
+                    properties:
+                      lexicalContribution:
+                        type: number
+                      vectorContribution:
+                        type: number
+                      tieBreakerContribution:
+                        type: number
+                      lexicalRank:
+                        type: integer
+                        nullable: true
+                      vectorRank:
+                        type: integer
+                        nullable: true
+            metrics:
+              type: object
+              properties:
+                lexicalSearchTimeMs:
+                  type: number
+                vectorSearchTimeMs:
+                  type: number
+                rankingTimeMs:
+                  type: number
+                totalTimeMs:
+                  type: number
+                lexicalCandidates:
+                  type: integer
+                vectorCandidates:
+                  type: integer
+                uniqueCandidates:
+                  type: integer
+                slaViolation:
+                  type: boolean
+                fallbackMode:
+                  type: string
+                  enum: [lexical, vector]
+                  nullable: true
+            warnings:
+              type: array
+              items:
+                type: string
+        example: |
+          {
+            "query": "parse JSON data",
+            "totalFound": 42,
+            "results": [
+              {
+                "fileId": "abc123",
+                "filePath": "src/services/parser.ts",
+                "lineNumber": 145,
+                "columnNumber": null,
+                "snippet": "function parseJSON(data: string): Result<JSONValue, ParseError> {",
+                "symbolName": "parseJSON",
+                "symbolType": "function",
+                "language": "typescript",
+                "finalScore": 0.487,
+                "finalRank": 1,
+                "scoreBreakdown": {
+                  "lexicalContribution": 0.250,
+                  "vectorContribution": 0.220,
+                  "tieBreakerContribution": 0.017,
+                  "lexicalRank": 3,
+                  "vectorRank": 5
+                }
+              }
+            ],
+            "metrics": {
+              "lexicalSearchTimeMs": 95,
+              "vectorSearchTimeMs": 142,
+              "rankingTimeMs": 48,
+              "totalTimeMs": 285,
+              "lexicalCandidates": 3,
+              "vectorCandidates": 5,
+              "uniqueCandidates": 7,
+              "slaViolation": false,
+              "fallbackMode": null
+            },
+            "warnings": []
+          }
+
+    errorHandling:
+      queryTooLong:
+        code: 1
+        message: "Query exceeds maximum length of 2000 characters"
+        example: "Error: Query too long (2543 chars). Maximum: 2000 characters."
+
+      queryTooShort:
+        code: 1
+        message: "Query must be at least 2 characters"
+        example: "Error: Query too short. Minimum: 2 characters."
+
+      invalidWeights:
+        code: 1
+        message: "Weight values must be between 0.0 and 1.0"
+        example: "Error: Invalid --alpha value: 1.5. Must be in range [0.0, 1.0]."
+
+      weightSumExceeded:
+        code: 1
+        message: "Sum of alpha, beta, and gamma must not exceed 1.0"
+        example: "Error: Weight sum (1.2) exceeds maximum (1.0). alpha=0.6, beta=0.5, gamma=0.1."
+
+      conflictingOptions:
+        code: 1
+        message: "Conflicting options specified"
+        example: "Error: Cannot use both --lexical-only and --vector-only."
+
+      invalidConfigFile:
+        code: 1
+        message: "Configuration file is invalid or cannot be read"
+        example: "Error: Invalid config file '/path/to/config.json': JSON parse error at line 5."
+
+      databaseNotInitialized:
+        code: 2
+        message: "Database not initialized. Run 'code-index init' first."
+        example: "Error: No index found at .codeindex/index.db. Run 'code-index init' to create index."
+
+      searchTimeout:
+        code: 3
+        message: "Search timed out, returning partial results"
+        example: "Warning: Search exceeded 300ms timeout. Returning 7 of 10 requested results."
+
+      componentFailure:
+        code: 0
+        message: "One search component failed, using fallback"
+        example: "Warning: Vector search failed. Using lexical-only results."
+
+    examples:
+      - description: Basic hybrid search
+        command: code-index search --hybrid "parse JSON data"
+
+      - description: Hybrid search with result limit
+        command: code-index search --hybrid --limit 20 "authentication middleware"
+
+      - description: Vector-only semantic search
+        command: code-index search --hybrid --vector-only "find similar functions"
+
+      - description: Search with file filters
+        command: code-index search --hybrid --include "src/**/*.ts" --exclude "**/*.test.ts" "database query"
+
+      - description: Search specific languages
+        command: code-index search --hybrid --language typescript --language javascript "async function"
+
+      - description: JSON output for scripting
+        command: code-index search --hybrid --json "error handling" | jq '.results[0].filePath'
+
+      - description: Detailed score explanation
+        command: code-index search --hybrid --explain --limit 5 "ranking algorithm"
+
+      - description: Custom fusion weights
+        command: code-index search --hybrid --alpha 0.7 --beta 0.3 "exact keyword match"
+
+      - description: Disable diversification for focused results
+        command: code-index search --hybrid --no-diversification "test helpers"
+
+      - description: Use custom configuration file
+        command: code-index search --hybrid --config ./my-ranking-config.json "search query"
+
+    behavior:
+      defaultMode:
+        description: Without --hybrid flag, use existing lexical-only search
+        rationale: Backward compatibility with existing search command
+
+      hybridMode:
+        description: With --hybrid flag, enable fusion of lexical + vector results
+        requirements:
+          - Both indices must exist (FTS5 and vec_embeddings)
+          - If one component fails, fall back gracefully per FR-011
+          - Apply configured fusion weights (α, β, γ)
+          - Return results within timeout or partial results with warning per FR-020
+
+      weightValidation:
+        description: Validate weight overrides if provided
+        rules:
+          - Individual weights in [0.0, 1.0]
+          - Sum of weights ≤ 1.0
+          - Log warning if extreme values detected (α=0, β=0) per FR-017
+
+      pagination:
+        description: Support offset/limit for large result sets
+        rules:
+          - Ranking performed on full candidate set
+          - Pagination applied to final ranked results
+          - totalFound indicates complete match count
+
+      performanceMonitoring:
+        description: Track and report performance metrics per FR-016
+        metrics:
+          - Component timing (lexical, vector, ranking)
+          - Candidate counts
+          - SLA violations
+          - Fallback mode usage
+
+configurationFiles:
+  rankingConfig:
+    path: .codeindex/ranking-config.json
+    description: Persistent ranking configuration (optional)
+    schema:
+      type: object
+      required: [version, fusion, diversification, tieBreakers, performance]
+      properties:
+        version:
+          type: string
+          example: "1.0"
+        fusion:
+          type: object
+          properties:
+            alpha:
+              type: number
+              minimum: 0
+              maximum: 1
+            beta:
+              type: number
+              minimum: 0
+              maximum: 1
+            gamma:
+              type: number
+              minimum: 0
+              maximum: 1
+            rrfK:
+              type: number
+              minimum: 1
+        diversification:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            lambda:
+              type: number
+              minimum: 0
+              maximum: 1
+            maxPerFile:
+              type: integer
+              minimum: 1
+        tieBreakers:
+          type: object
+          properties:
+            symbolTypeWeight:
+              type: number
+            pathPriorityWeight:
+              type: number
+            languageMatchWeight:
+              type: number
+            identifierMatchWeight:
+              type: number
+        performance:
+          type: object
+          properties:
+            candidateLimit:
+              type: integer
+            timeoutMs:
+              type: integer
+            earlyTerminationTopK:
+              type: integer
+
+testScenarios:
+  - name: Basic hybrid search returns results
+    command: code-index search --hybrid "test query"
+    preconditions:
+      - Index exists and is populated
+      - Both FTS5 and vector indices available
+    expectedOutput:
+      - Exit code 0
+      - Results displayed with scores
+      - Metrics shown
+
+  - name: Query length validation
+    command: code-index search --hybrid "x"
+    expectedOutput:
+      - Exit code 1
+      - Error message about minimum query length
+
+  - name: Weight override validation
+    command: code-index search --hybrid --alpha 1.5 "query"
+    expectedOutput:
+      - Exit code 1
+      - Error message about valid weight range
+
+  - name: Fallback to lexical when vector fails
+    command: code-index search --hybrid "query"
+    preconditions:
+      - FTS5 index exists
+      - Vector index missing or corrupted
+    expectedOutput:
+      - Exit code 0
+      - Warning about fallback mode
+      - Results from lexical search only
+
+  - name: SLA violation returns partial results
+    command: code-index search --hybrid --timeout 100 "complex query on large repo"
+    expectedOutput:
+      - Exit code 3
+      - Warning about timeout
+      - Partial results returned
+
+  - name: JSON output format
+    command: code-index search --hybrid --json "query"
+    expectedOutput:
+      - Exit code 0
+      - Valid JSON on stdout
+      - All required fields present
+
+  - name: Explain flag shows score breakdown
+    command: code-index search --hybrid --explain "query"
+    expectedOutput:
+      - Exit code 0
+      - Detailed score components for each result
+      - Component ranks shown
+
+  - name: Language filter works correctly
+    command: code-index search --hybrid --language typescript "function"
+    expectedOutput:
+      - Exit code 0
+      - All results are TypeScript files
+      - Non-TypeScript matches excluded
+
+  - name: Diversification prevents clustering
+    command: code-index search --hybrid "common pattern"
+    preconditions:
+      - Multiple matches in same file
+    expectedOutput:
+      - Exit code 0
+      - Max 3 results from any single file (per SC-003)
+      - Results distributed across files
+
+  - name: No diversification flag honors option
+    command: code-index search --hybrid --no-diversification "common pattern"
+    expectedOutput:
+      - Exit code 0
+      - May have >3 results from same file
+      - Results ordered purely by score

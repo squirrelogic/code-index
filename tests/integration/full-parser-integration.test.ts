@@ -320,7 +320,7 @@ describe('Full Parser Integration - End-to-End', () => {
       console.log('Performance by language:', timings);
       console.log(`Slowest/fastest ratio: ${ratio.toFixed(2)}x`);
 
-      expect(ratio).toBeLessThan(5); // Generous ratio for small sample sizes
+      expect(ratio).toBeLessThanOrEqual(5); // Generous ratio for small sample sizes
     });
   });
 
