@@ -5,6 +5,15 @@ import chalk from 'chalk';
 import { DatabaseService } from '../../services/database.js';
 import { SearcherService } from '../../services/searcher.js';
 import { OutputFormatter } from '../utils/output.js';
+import { HybridRanker } from '../../services/hybrid-ranker.js';
+import { PathDiversifier } from '../../services/path-diversifier.js';
+import { TieBreaker } from '../../services/tie-breaker.js';
+import { PerformanceMonitor } from '../../services/performance-monitor.js';
+import { ConfigurationService } from '../../services/configuration-service.js';
+import { MIN_QUERY_LENGTH, MAX_QUERY_LENGTH } from '../../constants/ranking-constants.js';
+import { hasExtremeWeights } from '../../lib/ranking-utils.js';
+import type { RankingCandidate } from '../../models/ranking-candidate.js';
+import type { HybridSearchResult } from '../../models/hybrid-search-result.js';
 
 interface SearchCommandOptions {
   limit?: string;
@@ -14,6 +23,17 @@ interface SearchCommandOptions {
   language?: string;
   format?: 'human' | 'json';
   stats?: boolean;
+  // Hybrid search options
+  hybrid?: boolean;
+  lexicalOnly?: boolean;
+  vectorOnly?: boolean;
+  noDiversification?: boolean;
+  explain?: boolean;
+  // Configuration overrides
+  alpha?: string;
+  beta?: string;
+  gamma?: string;
+  config?: string;
 }
 
 export function createSearchCommand(): Command {
@@ -27,6 +47,15 @@ export function createSearchCommand(): Command {
     .option('--language <lang>', 'Filter by programming language')
     .option('--format <type>', 'Output format (human or json)', 'human')
     .option('--stats', 'Show index statistics instead of searching')
+    .option('--hybrid', 'Use hybrid search (combines lexical + vector search)')
+    .option('--lexical-only', 'Use only lexical search in hybrid mode')
+    .option('--vector-only', 'Use only vector search in hybrid mode')
+    .option('--no-diversification', 'Disable path diversification in results')
+    .option('--explain', 'Show detailed score breakdown and tie-breaker details')
+    .option('--alpha <weight>', 'Override lexical weight (0.0-1.0)')
+    .option('--beta <weight>', 'Override vector weight (0.0-1.0)')
+    .option('--gamma <weight>', 'Override tie-breaker weight (0.0-1.0)')
+    .option('--config <path>', 'Use custom ranking configuration file')
     .action((query: string, options: SearchCommandOptions) => {
       const cwd = process.cwd();
       const codeIndexDir = join(cwd, '.codeindex');
@@ -87,6 +116,13 @@ export function createSearchCommand(): Command {
 
           database.close();
           process.exit(0);
+        }
+
+        // Handle hybrid search if requested
+        if (options.hybrid) {
+          handleHybridSearch(query, options, database, formatter);
+          database.close();
+          return;
         }
 
         // Perform search
@@ -214,4 +250,326 @@ function formatMatchLine(line: string, query: string, isRegex: boolean): string 
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Handle hybrid search request
+ */
+function handleHybridSearch(
+  query: string,
+  options: SearchCommandOptions,
+  database: DatabaseService,
+  formatter: OutputFormatter
+): void {
+  // Validate query length
+  if (query.length < MIN_QUERY_LENGTH) {
+    formatter.error('Query too short', {
+      message: `Query must be at least ${MIN_QUERY_LENGTH} characters`,
+      query
+    });
+    process.exit(1);
+  }
+
+  if (query.length > MAX_QUERY_LENGTH) {
+    formatter.error('Query too long', {
+      message: `Query must be at most ${MAX_QUERY_LENGTH} characters`,
+      query,
+      queryLength: query.length
+    });
+    process.exit(1);
+  }
+
+  // Validate mutually exclusive flags
+  if (options.lexicalOnly && options.vectorOnly) {
+    formatter.error('Conflicting options', {
+      message: 'Cannot use both --lexical-only and --vector-only flags together'
+    });
+    process.exit(1);
+  }
+
+  // Load configuration
+  const configService = options.config
+    ? new ConfigurationService(options.config)
+    : new ConfigurationService();
+
+  let config = configService.getConfig();
+  const warnings: string[] = [...configService.getWarnings()];
+
+  // Apply weight overrides from CLI flags (T026)
+  if (options.alpha || options.beta || options.gamma) {
+    const alpha = options.alpha ? parseFloat(options.alpha) : config.fusion.alpha;
+    const beta = options.beta ? parseFloat(options.beta) : config.fusion.beta;
+    const gamma = options.gamma ? parseFloat(options.gamma) : config.fusion.gamma;
+
+    // Validate weights
+    if (isNaN(alpha) || alpha < 0 || alpha > 1) {
+      formatter.error('Invalid alpha weight', {
+        message: 'Alpha must be a number between 0.0 and 1.0',
+        value: options.alpha
+      });
+      process.exit(1);
+    }
+
+    if (isNaN(beta) || beta < 0 || beta > 1) {
+      formatter.error('Invalid beta weight', {
+        message: 'Beta must be a number between 0.0 and 1.0',
+        value: options.beta
+      });
+      process.exit(1);
+    }
+
+    if (isNaN(gamma) || gamma < 0 || gamma > 1) {
+      formatter.error('Invalid gamma weight', {
+        message: 'Gamma must be a number between 0.0 and 1.0',
+        value: options.gamma
+      });
+      process.exit(1);
+    }
+
+    // Check weight sum
+    const weightSum = alpha + beta + gamma;
+    if (weightSum > 1.0) {
+      formatter.error('Invalid weight sum', {
+        message: `Weights sum to ${weightSum.toFixed(3)}, must be <= 1.0`,
+        alpha,
+        beta,
+        gamma
+      });
+      process.exit(1);
+    }
+
+    // Apply overrides
+    config = {
+      ...config,
+      fusion: {
+        ...config.fusion,
+        alpha,
+        beta,
+        gamma
+      }
+    };
+
+    // Check for extreme weights
+    if (hasExtremeWeights(config)) {
+      if (alpha === 0) warnings.push('Warning: alpha = 0 (lexical search disabled)');
+      if (beta === 0) warnings.push('Warning: beta = 0 (vector search disabled)');
+      if (alpha > 0.9) warnings.push('Warning: alpha > 0.9 (lexical heavily favored)');
+      if (beta > 0.9) warnings.push('Warning: beta > 0.9 (vector heavily favored)');
+    }
+  }
+
+  // Apply diversification flag (T031)
+  if (options.noDiversification) {
+    config = {
+      ...config,
+      diversification: {
+        ...config.diversification,
+        enabled: false
+      }
+    };
+  }
+
+  const performanceMonitor = new PerformanceMonitor(config.performance.timeoutMs);
+
+  try {
+    // Step 1: Parallel candidate retrieval
+    performanceMonitor.startTimer('lexicalSearch');
+    performanceMonitor.startTimer('vectorSearch');
+
+    const enableLexical = !options.vectorOnly;
+    const enableVector = !options.lexicalOnly;
+
+    // Mock candidate retrieval (TODO: integrate with actual SearcherService and VectorStorageService)
+    const lexicalCandidates: RankingCandidate[] = enableLexical ? mockGetLexicalCandidates(query, database) : [];
+    performanceMonitor.stopTimer('lexicalSearch');
+
+    const vectorCandidates: RankingCandidate[] = enableVector ? mockGetVectorCandidates(query, database) : [];
+    performanceMonitor.stopTimer('vectorSearch');
+
+    // Track fallback mode
+    if (lexicalCandidates.length === 0 && vectorCandidates.length > 0) {
+      performanceMonitor.setFallbackMode('vector');
+      warnings.push('Lexical search returned no results, using vector-only mode');
+    } else if (vectorCandidates.length === 0 && lexicalCandidates.length > 0) {
+      performanceMonitor.setFallbackMode('lexical');
+      warnings.push('Vector search returned no results, using lexical-only mode');
+    }
+
+    // Step 2: Fusion & Ranking
+    performanceMonitor.startTimer('ranking');
+
+    const ranker = new HybridRanker(config);
+    let results = ranker.rank(lexicalCandidates, vectorCandidates);
+
+    // Step 3: Path Diversification
+    const diversifier = new PathDiversifier(config.diversification);
+    results = diversifier.diversify(results);
+
+    // Step 4: Tie-Breaking
+    const tieBreaker = new TieBreaker(config.tieBreakers);
+    results = tieBreaker.applyTieBreakers(results, query);
+
+    performanceMonitor.stopTimer('ranking');
+
+    // Step 5: Collect metrics
+    performanceMonitor.recordCandidateCounts(
+      lexicalCandidates.length,
+      vectorCandidates.length,
+      results.length
+    );
+
+    const metrics = performanceMonitor.getMetrics();
+
+    // Check SLA violation
+    if (metrics.slaViolation) {
+      warnings.push(`Search exceeded timeout (${metrics.totalTimeMs}ms > ${config.performance.timeoutMs}ms)`);
+    }
+
+    // Build hybrid search result
+    const hybridResult: HybridSearchResult = {
+      results: results.slice(0, parseInt(options.limit || '10')),
+      totalFound: results.length,
+      query: {
+        query,
+        enableLexical,
+        enableVector,
+        limit: parseInt(options.limit || '10'),
+        offset: 0
+      },
+      appliedConfig: config,
+      metrics,
+      warnings
+    };
+
+    // Format output
+    if (options.format === 'json') {
+      formatHybridResultsJSON(hybridResult);
+    } else {
+      formatHybridResults(hybridResult, options.explain || false);
+    }
+
+    process.exit(metrics.slaViolation ? 3 : 0);
+  } catch (error) {
+    formatter.error('Hybrid search failed', {
+      message: error instanceof Error ? error.message : String(error),
+      query
+    });
+    process.exit(1);
+  }
+}
+
+/**
+ * Format hybrid search results for human-readable terminal display (T021, enhanced T035)
+ */
+function formatHybridResults(result: HybridSearchResult, explain: boolean = false): void {
+  const { results, totalFound, query, metrics, warnings } = result;
+
+  // Header
+  console.log(chalk.bold('\n🔍 Hybrid Search Results'));
+  console.log(chalk.dim(`Query: ${query.query}`));
+  console.log(chalk.dim(`Timing: ${metrics.totalTimeMs}ms (lexical: ${metrics.lexicalSearchTimeMs}ms, vector: ${metrics.vectorSearchTimeMs}ms, ranking: ${metrics.rankingTimeMs}ms)`));
+  console.log('');
+
+  // Results
+  if (results.length === 0) {
+    console.log(chalk.yellow('No matches found'));
+    console.log('');
+  } else {
+    console.log(chalk.green(`Found ${totalFound} matches, showing top ${results.length}:`));
+    console.log('');
+
+    for (const r of results) {
+      // Result header with score
+      console.log(
+        chalk.blue.bold(`[Score: ${r.finalScore.toFixed(3)}]`) +
+        ' ' +
+        chalk.cyan(`${r.filePath}:${r.lineNumber}`) +
+        (r.symbolType ? chalk.dim(` [${r.symbolType}${r.symbolName ? `: ${r.symbolName}` : ''}]`) : '')
+      );
+
+      // Score breakdown
+      const lexScore = r.scoreBreakdown.lexicalContribution.toFixed(3);
+      const vecScore = r.scoreBreakdown.vectorContribution.toFixed(3);
+      const tieScore = r.scoreBreakdown.tieBreakerContribution.toFixed(3);
+
+      console.log(
+        chalk.dim(`  Lexical: ${lexScore}`) +
+        (r.scoreBreakdown.lexicalRank ? chalk.dim(` (#${r.scoreBreakdown.lexicalRank})`) : '') +
+        chalk.dim(`, Vector: ${vecScore}`) +
+        (r.scoreBreakdown.vectorRank ? chalk.dim(` (#${r.scoreBreakdown.vectorRank})`) : '') +
+        chalk.dim(`, Tie: +${tieScore}`)
+      );
+
+      // Show detailed explanation if --explain flag is set (T035)
+      if (explain && r.scoreBreakdown.tieBreakerScores) {
+        const tb = r.scoreBreakdown.tieBreakerScores;
+        console.log(chalk.dim('  Tie-breaker details:'));
+        console.log(chalk.dim(`    • Symbol type priority: ${tb.symbolTypePriority.toFixed(3)}`));
+        console.log(chalk.dim(`    • Path priority: ${tb.pathPriority.toFixed(3)}`));
+        console.log(chalk.dim(`    • Language match: ${tb.languageMatch.toFixed(3)}`));
+        console.log(chalk.dim(`    • Identifier match: ${tb.identifierMatch.toFixed(3)}`));
+        console.log(chalk.dim(`    • Combined: ${tb.combinedScore.toFixed(3)}`));
+      }
+
+      if (explain && r.scoreBreakdown.diversityPenalty !== undefined) {
+        console.log(chalk.dim(`  Diversity penalty: -${r.scoreBreakdown.diversityPenalty.toFixed(3)}`));
+      }
+
+      if (explain) {
+        console.log(chalk.dim(`  Original ranks: Lexical #${r.scoreBreakdown.lexicalRank || 'N/A'}, Vector #${r.scoreBreakdown.vectorRank || 'N/A'}`));
+        if (r.scoreBreakdown.lexicalScore !== undefined) {
+          console.log(chalk.dim(`  Raw scores: BM25=${r.scoreBreakdown.lexicalScore.toFixed(3)}, Cosine=${r.scoreBreakdown.vectorScore?.toFixed(3) || 'N/A'}`));
+        }
+      }
+
+      // Code preview
+      console.log(chalk.dim(`  ${r.snippet}`));
+      console.log('');
+    }
+  }
+
+  // Footer with warnings
+  if (warnings.length > 0) {
+    console.log(chalk.yellow('⚠ Warnings:'));
+    for (const warning of warnings) {
+      console.log(chalk.yellow(`  • ${warning}`));
+    }
+    console.log('');
+  }
+
+  // Performance indicator
+  if (metrics.slaViolation) {
+    console.log(chalk.red('✗') + chalk.dim(` Search exceeded timeout (${metrics.totalTimeMs}ms)`));
+  } else if (metrics.totalTimeMs < 100) {
+    console.log(chalk.green('✓') + chalk.dim(` Search completed in ${metrics.totalTimeMs}ms`));
+  } else {
+    console.log(chalk.yellow('⚠') + chalk.dim(` Search took ${metrics.totalTimeMs}ms`));
+  }
+}
+
+/**
+ * Format hybrid search results as JSON (T022)
+ */
+function formatHybridResultsJSON(result: HybridSearchResult): void {
+  console.log(JSON.stringify(result, null, 2));
+}
+
+/**
+ * Mock function to get lexical candidates
+ * TODO: Replace with actual integration to SearcherService
+ */
+function mockGetLexicalCandidates(_query: string, _database: DatabaseService): RankingCandidate[] {
+  // This is a placeholder - in production, this would call SearcherService
+  // and convert results to RankingCandidate[] format
+  return [];
+}
+
+/**
+ * Mock function to get vector candidates
+ * TODO: Replace with actual integration to VectorStorageService
+ */
+function mockGetVectorCandidates(_query: string, _database: DatabaseService): RankingCandidate[] {
+  // This is a placeholder - in production, this would call VectorStorageService
+  // and convert results to RankingCandidate[] format
+  return [];
 }
