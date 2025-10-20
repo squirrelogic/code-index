@@ -12,6 +12,7 @@ A fast, offline TypeScript/Node.js CLI tool for local code indexing and search u
 - 👀 **File Watcher** - Real-time index updates with debounced change detection
 - 🪝 **Git Hooks** - Automatic indexing after merge, checkout, and rebase
 - 🏥 **Self-Diagnostic** - Built-in health checks with auto-fix capabilities
+- 🤖 **MCP Server** - Model Context Protocol server for AI assistant integration
 - 📦 **Zero Dependencies** - Minimal runtime dependencies
 
 ## Requirements
@@ -266,6 +267,64 @@ code-index metrics
 code-index metrics --json > performance-report.json
 ```
 
+### `code-index serve`
+
+Start the MCP (Model Context Protocol) server for code intelligence. The server listens on stdio for JSON-RPC 2.0 requests and provides 8 tool functions for AI assistants to navigate and understand codebases.
+
+**Available Tools:**
+- `search` - Search codebase for text patterns
+- `find_def` - Find symbol definitions
+- `find_refs` - Find symbol references
+- `callers` - Find function callers
+- `callees` - Find function callees
+- `open_at` - Open file at specific line
+- `refresh` - Refresh code index
+- `symbols` - List symbols in file or codebase
+
+**Options:**
+- `-p, --project <path>` - Project root directory (defaults to current directory)
+
+**Environment Variables:**
+- `CODE_INDEX_AUTH_TOKEN` - Optional authentication token (when set, clients must provide matching token)
+
+**Examples:**
+```bash
+# Start MCP server (requires indexed codebase)
+code-index serve
+
+# Start with authentication
+CODE_INDEX_AUTH_TOKEN=secret code-index serve
+
+# Start for specific project
+code-index serve --project /path/to/project
+```
+
+**Integration:**
+
+Create an `.mcp.json` file in your project to configure MCP clients:
+
+```json
+{
+  "mcpServers": {
+    "code-index": {
+      "command": "code-index",
+      "args": ["serve"],
+      "env": {
+        "CODE_INDEX_AUTH_TOKEN": ""
+      }
+    }
+  }
+}
+```
+
+For Claude Code integration, the server will be automatically detected and available in the tool picker.
+
+**Notes:**
+- Server uses stdio transport (stdin/stdout for JSON-RPC messages)
+- All responses include file anchors (`file:line:col`) and code previews
+- Supports concurrent requests (handles 50+ simultaneous queries)
+- Gracefully handles SIGTERM/SIGINT for clean shutdown
+
 ### `code-index uninstall`
 
 Remove all code-index artifacts from your project.
@@ -460,6 +519,26 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
 MIT © [Squirrel Logic]
 
 ## Changelog
+
+### 4.0.0 (MCP Server Integration)
+- **New Features:**
+  - 🤖 **MCP Server** - Model Context Protocol server for AI assistant integration
+  - 8 tool functions: search, find_def, find_refs, callers, callees, open_at, refresh, symbols
+  - All responses include file anchors (file:line:col) and code previews
+  - Optional authentication via CODE_INDEX_AUTH_TOKEN environment variable
+  - Concurrent request handling (50+ simultaneous queries)
+  - Graceful shutdown with cleanup
+- **Commands:**
+  - `serve` - Start MCP server on stdio transport
+- **Integration:**
+  - `.mcp.json` configuration file support
+  - Claude Code tool picker integration
+  - VSCode-compatible file anchors
+- **Performance:**
+  - Search <500ms for <100k files
+  - Symbol navigation <200ms
+  - Prepared statement caching for optimal performance
+  - WAL mode for concurrent reads
 
 ### 3.0.0 (Hybrid Search Release)
 - **New Features:**

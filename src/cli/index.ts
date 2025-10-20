@@ -53,6 +53,7 @@ import { createHooksCommand } from './commands/hooks.js';
 import { createDiagnoseCommand } from './commands/diagnose.js';
 import { createEmbedCommand } from './commands/embed.js';
 import { createConfigCommand } from './commands/config.js';
+import { createServeCommand } from './commands/serve.js';
 
 // Register commands
 program.addCommand(createInitCommand());
@@ -66,6 +67,7 @@ program.addCommand(createHooksCommand());
 program.addCommand(createDiagnoseCommand());
 program.addCommand(createEmbedCommand());
 program.addCommand(createConfigCommand());
+program.addCommand(createServeCommand());
 
 // Parse arguments
 try {
