@@ -1,0 +1,447 @@
+# MCP Tools Contract
+# Code Intelligence Protocol Server Tool Definitions
+# Feature: 010-expose-an-mcp
+# Date: 2025-10-19
+
+# This contract defines the tool interface for the MCP server following
+# JSON-RPC 2.0 protocol over stdio transport.
+
+tools:
+  - name: search
+    description: Search the codebase for matching code with optional filters
+    inputSchema:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Search query for code content
+          minLength: 1
+          example: "database connection"
+        directory:
+          type: string
+          description: Directory filter (relative to project root)
+          example: "src/services"
+        language:
+          type: string
+          description: Programming language filter
+          example: "typescript"
+          enum: [typescript, javascript, python, rust, go, java, ruby, php, c, cpp]
+        limit:
+          type: number
+          description: Maximum number of results to return
+          minimum: 1
+          maximum: 100
+          default: 10
+      required: [query]
+    outputSchema:
+      type: object
+      properties:
+        query:
+          type: string
+          description: Echo of the search query
+        total:
+          type: number
+          description: Total number of matches found
+        returned:
+          type: number
+          description: Number of results actually returned (limited by limit param)
+        results:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/SearchResult"
+      required: [query, total, returned, results]
+    examples:
+      - name: Basic search
+        input:
+          query: "fetchData"
+        output:
+          query: "fetchData"
+          total: 15
+          returned: 10
+          results:
+            - anchor:
+                file: "/project/src/api/client.ts"
+                line: 42
+                column: 15
+              preview:
+                startLine: 40
+                lines:
+                  - "export class ApiClient {"
+                  - "  async fetchData(endpoint: string) {"
+                  - "    const response = await fetch(endpoint);"
+                  - "    return response.json();"
+                  - "  }"
+              score: 0.95
+
+  - name: find_def
+    description: Find the definition of a symbol (function, class, variable, etc.)
+    inputSchema:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Symbol name to find definition for
+          minLength: 1
+          example: "ApiClient"
+      required: [symbol]
+    outputSchema:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Echo of the symbol name
+        found:
+          type: boolean
+          description: Whether the symbol definition was found
+        definition:
+          $ref: "#/components/schemas/SymbolDefinition"
+          description: Symbol definition details (only present if found=true)
+      required: [symbol, found]
+    examples:
+      - name: Find class definition
+        input:
+          symbol: "ApiClient"
+        output:
+          symbol: "ApiClient"
+          found: true
+          definition:
+            symbol: "ApiClient"
+            kind: "class"
+            anchor:
+              file: "/project/src/api/client.ts"
+              line: 10
+              column: 14
+            preview:
+              startLine: 7
+              lines:
+                - "import { Config } from './config';"
+                - ""
+                - "export class ApiClient {"
+                - "  private config: Config;"
+                - ""
+                - "  constructor(config: Config) {"
+            containerName: null
+
+  - name: find_refs
+    description: Find all references to a symbol across the codebase
+    inputSchema:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Symbol name to find references for
+          minLength: 1
+          example: "fetchData"
+      required: [symbol]
+    outputSchema:
+      type: object
+      properties:
+        symbol:
+          type: string
+        total:
+          type: number
+          description: Total number of references found
+        references:
+          type: array
+          items:
+            $ref: "#/components/schemas/SymbolReference"
+      required: [symbol, total, references]
+
+  - name: callers
+    description: Find all functions that call the specified function
+    inputSchema:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Function name to find callers of
+          minLength: 1
+          example: "processRequest"
+      required: [symbol]
+    outputSchema:
+      type: object
+      properties:
+        symbol:
+          type: string
+        total:
+          type: number
+        callers:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallRelationship"
+      required: [symbol, total, callers]
+
+  - name: callees
+    description: Find all functions called by the specified function
+    inputSchema:
+      type: object
+      properties:
+        symbol:
+          type: string
+          description: Function name to find callees of
+          minLength: 1
+          example: "handleRequest"
+      required: [symbol]
+    outputSchema:
+      type: object
+      properties:
+        symbol:
+          type: string
+        total:
+          type: number
+        callees:
+          type: array
+          items:
+            $ref: "#/components/schemas/CallRelationship"
+      required: [symbol, total, callees]
+
+  - name: open_at
+    description: Open and view code at a specific file location with context
+    inputSchema:
+      type: object
+      properties:
+        path:
+          type: string
+          description: File path (absolute or relative to project root)
+          minLength: 1
+          example: "src/index.ts"
+        line:
+          type: number
+          description: Line number to view (1-based)
+          minimum: 1
+          example: 42
+        contextLines:
+          type: number
+          description: Number of context lines to show around the target line
+          minimum: 0
+          maximum: 50
+          default: 10
+      required: [path, line]
+    outputSchema:
+      type: object
+      properties:
+        anchor:
+          $ref: "#/components/schemas/CodeAnchor"
+        preview:
+          $ref: "#/components/schemas/CodePreview"
+        exists:
+          type: boolean
+          description: Whether the file exists at the specified path
+      required: [anchor, preview, exists]
+
+  - name: refresh
+    description: Refresh the search index for specified paths or entire codebase
+    inputSchema:
+      type: object
+      properties:
+        paths:
+          type: array
+          description: Specific paths to refresh (if omitted, refresh all)
+          items:
+            type: string
+          example: ["src/api", "src/services/database.ts"]
+    outputSchema:
+      type: object
+      properties:
+        refreshed:
+          type: number
+          description: Number of files refreshed
+        duration:
+          type: number
+          description: Duration of refresh operation in milliseconds
+        errors:
+          type: array
+          description: List of errors encountered during refresh
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              error:
+                type: string
+            required: [path, error]
+      required: [refreshed, duration, errors]
+
+  - name: symbols
+    description: List all symbols in a file or across the codebase
+    inputSchema:
+      type: object
+      properties:
+        path:
+          type: string
+          description: File path to list symbols from (if omitted, list all symbols)
+          example: "src/api/client.ts"
+    outputSchema:
+      type: object
+      properties:
+        path:
+          type: string
+          description: File path (if filtering by file)
+        total:
+          type: number
+          description: Total number of symbols
+        symbols:
+          type: array
+          items:
+            $ref: "#/components/schemas/SymbolDefinition"
+      required: [total, symbols]
+
+components:
+  schemas:
+    CodeAnchor:
+      type: object
+      description: Precise location in source code
+      properties:
+        file:
+          type: string
+          description: Absolute file path
+        line:
+          type: number
+          description: Line number (1-based)
+          minimum: 1
+        column:
+          type: number
+          description: Column number (1-based, optional)
+          minimum: 1
+      required: [file, line]
+
+    CodePreview:
+      type: object
+      description: Code snippet with context lines
+      properties:
+        lines:
+          type: array
+          description: Preview lines (maximum 10)
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+        startLine:
+          type: number
+          description: Line number of first line in preview (1-based)
+          minimum: 1
+      required: [lines, startLine]
+
+    SearchResult:
+      type: object
+      description: Single search match result
+      properties:
+        anchor:
+          $ref: "#/components/schemas/CodeAnchor"
+        preview:
+          $ref: "#/components/schemas/CodePreview"
+        score:
+          type: number
+          description: Relevance score (0.0 to 1.0)
+          minimum: 0.0
+          maximum: 1.0
+      required: [anchor, preview]
+
+    SymbolKind:
+      type: string
+      enum:
+        - function
+        - class
+        - interface
+        - type
+        - variable
+        - constant
+        - method
+        - property
+        - enum
+        - namespace
+
+    SymbolDefinition:
+      type: object
+      description: Symbol definition with metadata
+      properties:
+        symbol:
+          type: string
+          description: Symbol name
+        kind:
+          $ref: "#/components/schemas/SymbolKind"
+        anchor:
+          $ref: "#/components/schemas/CodeAnchor"
+        preview:
+          $ref: "#/components/schemas/CodePreview"
+        containerName:
+          type: string
+          description: Parent symbol name (e.g., containing class)
+      required: [symbol, kind, anchor, preview]
+
+    SymbolReference:
+      type: object
+      description: Location where a symbol is referenced
+      properties:
+        symbol:
+          type: string
+        anchor:
+          $ref: "#/components/schemas/CodeAnchor"
+        preview:
+          $ref: "#/components/schemas/CodePreview"
+        isWrite:
+          type: boolean
+          description: True if this is a write/assignment, false for read/usage
+      required: [symbol, anchor, preview, isWrite]
+
+    CallRelationship:
+      type: object
+      description: Caller/callee relationship between functions
+      properties:
+        caller:
+          type: string
+          description: Function making the call
+        callee:
+          type: string
+          description: Function being called
+        anchor:
+          $ref: "#/components/schemas/CodeAnchor"
+        preview:
+          $ref: "#/components/schemas/CodePreview"
+      required: [caller, callee, anchor, preview]
+
+transport:
+  type: stdio
+  protocol: json-rpc-2.0
+  framing: newline-delimited-json
+  description: |
+    Communication occurs via standard input/output streams using JSON-RPC 2.0 protocol.
+    Each message is a complete JSON object terminated by a newline character.
+
+    Request format:
+    {"jsonrpc":"2.0","id":"unique-id","method":"tools/call","params":{"name":"search","arguments":{...}}}
+
+    Response format:
+    {"jsonrpc":"2.0","id":"unique-id","result":{"content":[{"type":"text","text":"..."}]}}
+
+    Error response format:
+    {"jsonrpc":"2.0","id":"unique-id","error":{"code":-32602,"message":"Invalid params"}}
+
+authentication:
+  type: optional
+  mechanism: environment-variable
+  variable: CODE_INDEX_AUTH_TOKEN
+  description: |
+    Authentication is disabled by default. When CODE_INDEX_AUTH_TOKEN environment
+    variable is set, clients must provide matching token for access.
+
+    If auth fails, server returns JSON-RPC error:
+    {"jsonrpc":"2.0","id":"...","error":{"code":-32001,"message":"Authentication failed"}}
+
+errorCodes:
+  standard:
+    -32700: "Parse error - Invalid JSON"
+    -32600: "Invalid request - Protocol violation"
+    -32601: "Method not found"
+    -32602: "Invalid params"
+    -32603: "Internal error"
+  custom:
+    -32001: "Authentication failed - Invalid or missing token"
+    -32002: "Index unavailable - Database corrupted or missing"
+
+performanceTargets:
+  search: "<500ms for codebases <100k files"
+  symbolNavigation: "<200ms for typical queries"
+  concurrentRequests: "50+ handled asynchronously"
+  indexRefresh: "<10s for incremental updates"

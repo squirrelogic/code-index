@@ -1,0 +1,133 @@
+{
+  "mcpServers": {
+    "code-index": {
+      "command": "code-index",
+      "args": ["serve"],
+      "env": {
+        "CODE_INDEX_AUTH_TOKEN": ""
+      },
+      "description": "Code intelligence server for searching and navigating code",
+      "capabilities": {
+        "tools": true
+      },
+      "tools": [
+        {
+          "name": "search",
+          "description": "Search the codebase for text patterns",
+          "parameters": {
+            "query": {
+              "type": "string",
+              "required": true,
+              "description": "Search query for code"
+            },
+            "directory": {
+              "type": "string",
+              "required": false,
+              "description": "Directory filter (relative to project root)"
+            },
+            "language": {
+              "type": "string",
+              "required": false,
+              "description": "Programming language filter (e.g., 'typescript', 'python')"
+            },
+            "limit": {
+              "type": "number",
+              "required": false,
+              "default": 10,
+              "description": "Maximum results (1-100)"
+            }
+          }
+        },
+        {
+          "name": "find_def",
+          "description": "Find the definition of a symbol",
+          "parameters": {
+            "symbol": {
+              "type": "string",
+              "required": true,
+              "description": "Symbol name to find definition for"
+            }
+          }
+        },
+        {
+          "name": "find_refs",
+          "description": "Find all references to a symbol",
+          "parameters": {
+            "symbol": {
+              "type": "string",
+              "required": true,
+              "description": "Symbol name to find references for"
+            }
+          }
+        },
+        {
+          "name": "callers",
+          "description": "Find all callers of a function",
+          "parameters": {
+            "symbol": {
+              "type": "string",
+              "required": true,
+              "description": "Function name to find callers of"
+            }
+          }
+        },
+        {
+          "name": "callees",
+          "description": "Find all callees of a function",
+          "parameters": {
+            "symbol": {
+              "type": "string",
+              "required": true,
+              "description": "Function name to find callees of"
+            }
+          }
+        },
+        {
+          "name": "open_at",
+          "description": "Open a file at a specific line",
+          "parameters": {
+            "path": {
+              "type": "string",
+              "required": true,
+              "description": "File path (absolute or relative to project root)"
+            },
+            "line": {
+              "type": "number",
+              "required": true,
+              "description": "Line number (1-based)"
+            },
+            "contextLines": {
+              "type": "number",
+              "required": false,
+              "default": 10,
+              "description": "Number of context lines around target line (0-50)"
+            }
+          }
+        },
+        {
+          "name": "refresh",
+          "description": "Refresh the code index",
+          "parameters": {
+            "paths": {
+              "type": "array",
+              "items": { "type": "string" },
+              "required": false,
+              "description": "Specific paths to refresh (if omitted, refresh all)"
+            }
+          }
+        },
+        {
+          "name": "symbols",
+          "description": "List symbols in a file or codebase",
+          "parameters": {
+            "path": {
+              "type": "string",
+              "required": false,
+              "description": "File path to list symbols from (if omitted, list all symbols)"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
