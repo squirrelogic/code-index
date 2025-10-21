@@ -12,7 +12,6 @@ import {
   ListToolsRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
-import Database from 'better-sqlite3';
 import { join, resolve } from 'path';
 import { existsSync, createWriteStream } from 'fs';
 import { checkAuth, AuthenticationError } from '../lib/mcp-auth.js';
@@ -20,68 +19,39 @@ import {
   SearchInputSchema,
   SearchOutput,
   FindDefinitionInputSchema,
-  FindDefinitionOutput,
   FindReferencesInputSchema,
-  FindReferencesOutput,
   CallersInputSchema,
-  CallersOutput,
   CalleesInputSchema,
-  CalleesOutput,
   OpenAtInputSchema,
   OpenAtOutput,
   RefreshInputSchema,
   RefreshOutput,
   SymbolsInputSchema,
-  SymbolsOutput,
-  SymbolDefinition,
-  SymbolReference,
-  CallRelationship,
   ToolResponse
 } from '../models/mcp-types.js';
 import {
   extractPreviewFromFile,
-  extractPreviewWithAnchor,
   createAnchor
 } from './preview-formatter.js';
-
-/**
- * Query cache for prepared SQL statements
- */
-class QueryCache {
-  private cache = new Map<string, Database.Statement>();
-  private db: Database.Database;
-
-  constructor(db: Database.Database) {
-    this.db = db;
-  }
-
-  prepare(sql: string): Database.Statement {
-    if (!this.cache.has(sql)) {
-      this.cache.set(sql, this.db.prepare(sql));
-    }
-    return this.cache.get(sql)!;
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-}
+import { SearchService } from './searcher.js';
+import { HybridIndex } from './hybrid-index.js';
+import { ASTPersistenceService } from './ast-persistence.js';
+import { OnnxEmbedder } from './onnx-embedder.js';
+import { IndexStoreService } from './index-store.js';
 
 /**
  * MCP Server for Code Intelligence
  */
 export class MCPServer {
   private server: Server;
-  private db: Database.Database | null = null;
-  private queryCache: QueryCache | null = null;
+  private searchService: SearchService | null = null;
+  private hybridIndex: HybridIndex | null = null;
   private projectRoot: string;
-  private dbPath: string;
   private logStream: ReturnType<typeof createWriteStream>;
   private activeRequests = new Map<string, Promise<any>>();
 
   constructor(projectRoot: string) {
     this.projectRoot = resolve(projectRoot);
-    this.dbPath = join(this.projectRoot, '.codeindex', 'index.db');
 
     // Setup logging
     const logPath = join(this.projectRoot, '.codeindex', 'logs', 'mcp-server.log');
@@ -102,6 +72,41 @@ export class MCPServer {
 
     this.setupHandlers();
     this.setupShutdownHandlers();
+  }
+
+  /**
+   * Initialize search services
+   */
+  private async initializeServices(): Promise<void> {
+    if (this.searchService) return;
+
+    const indexPath = join(this.projectRoot, '.codeindex');
+    const modelPath = join(indexPath, 'models', 'gte-small.onnx');
+    const astPath = join(indexPath, 'ast');
+
+    // Check if model exists
+    if (!existsSync(modelPath)) {
+      throw new Error('ONNX model not found. Run "code-index init" first.');
+    }
+
+    // Initialize embedder
+    const embedder = new OnnxEmbedder(modelPath);
+    await embedder.init();
+
+    // Initialize index store
+    const store = new IndexStoreService(indexPath);
+
+    // Initialize hybrid index
+    this.hybridIndex = new HybridIndex(embedder, store);
+    await this.hybridIndex.load();
+
+    // Initialize AST persistence
+    const astPersistence = new ASTPersistenceService(astPath);
+
+    // Initialize search service
+    this.searchService = new SearchService(this.hybridIndex, astPersistence);
+
+    this.log('info', 'Search services initialized');
   }
 
   /**
@@ -290,7 +295,7 @@ export class MCPServer {
   private async handleSearch(args: unknown): Promise<ToolResponse> {
     const validated = SearchInputSchema.parse(args);
 
-    this.ensureDatabase();
+    await this.initializeServices();
 
     // Validate query
     if (!validated.query || validated.query.trim().length === 0) {
@@ -298,32 +303,35 @@ export class MCPServer {
     }
 
     try {
-      const stmt = this.queryCache!.prepare(`
-        SELECT f.id, f.file_path, f.content, f.language
-        FROM files_fts
-        JOIN files f ON files_fts.file_id = f.id
-        WHERE files_fts MATCH ?
-        LIMIT ?
-      `);
+      const results = await this.searchService!.search(validated.query, {
+        limit: validated.limit,
+        includeAst: false // Don't include full AST in MCP responses
+      });
 
-      const rows = stmt.all(validated.query, validated.limit) as any[];
+      const formattedResults = results.map(result => {
+        // Parse anchor string "file:line:column"
+        const anchorParts = result.anchor.split(':');
+        const file = anchorParts[0] || result.filePath;
+        const line = parseInt(anchorParts[1] || '1');
+        const column = anchorParts[2] ? parseInt(anchorParts[2]) : undefined;
 
-      const results = rows.map(row => {
-        const { anchor, preview } = extractPreviewWithAnchor(
-          row.file_path,
-          row.content,
-          1, // We'll need to find actual line number from FTS match
-          undefined,
-          10
-        );
-        return { anchor, preview };
+        // Get file preview
+        const preview = existsSync(file)
+          ? extractPreviewFromFile(file, line, 3)
+          : { lines: [], startLine: line };
+
+        return {
+          anchor: { file, line, column },
+          preview,
+          score: result.score
+        };
       });
 
       const output: SearchOutput = {
         query: validated.query,
-        total: results.length,
-        returned: results.length,
-        results
+        total: formattedResults.length,
+        returned: formattedResults.length,
+        results: formattedResults
       };
 
       return {
@@ -333,9 +341,6 @@ export class MCPServer {
         }]
       };
     } catch (error: any) {
-      if (error.message?.includes('CORRUPT')) {
-        throw new McpError(-32002, 'Index unavailable: Database is corrupted');
-      }
       throw new McpError(-32603, `Search failed: ${error.message}`);
     }
   }
@@ -346,67 +351,17 @@ export class MCPServer {
   private async handleFindDefinition(args: unknown): Promise<ToolResponse> {
     const validated = FindDefinitionInputSchema.parse(args);
 
-    this.ensureDatabase();
-
-    try {
-      const stmt = this.queryCache!.prepare(`
-        SELECT s.symbol_name, s.symbol_type, s.line_start, f.file_path, f.content
-        FROM symbols s
-        JOIN files f ON s.file_id = f.id
-        WHERE s.symbol_name = ? AND s.deleted_at IS NULL
-        LIMIT 1
-      `);
-
-      const row = stmt.get(validated.symbol) as any;
-
-      if (!row) {
-        const output: FindDefinitionOutput = {
+    // Symbol-based tools are not available in hybrid search architecture
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
           symbol: validated.symbol,
-          found: false
-        };
-
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify(output, null, 2)
-          }]
-        };
-      }
-
-      const { anchor, preview } = extractPreviewWithAnchor(
-        row.file_path,
-        row.content,
-        row.line_start,
-        undefined, // No column information in schema
-        10
-      );
-
-      const definition: SymbolDefinition = {
-        symbol: row.symbol_name,
-        kind: row.symbol_type,
-        anchor,
-        preview,
-        containerName: undefined // No container name in schema
-      };
-
-      const output: FindDefinitionOutput = {
-        symbol: validated.symbol,
-        found: true,
-        definition
-      };
-
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(output, null, 2)
-        }]
-      };
-    } catch (error: any) {
-      if (error.message?.includes('CORRUPT')) {
-        throw new McpError(-32002, 'Index unavailable: Database is corrupted');
-      }
-      throw new McpError(-32603, `Find definition failed: ${error.message}`);
-    }
+          found: false,
+          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
+        }, null, 2)
+      }]
+    };
   }
 
   /**
@@ -415,53 +370,17 @@ export class MCPServer {
   private async handleFindReferences(args: unknown): Promise<ToolResponse> {
     const validated = FindReferencesInputSchema.parse(args);
 
-    this.ensureDatabase();
-
-    try {
-      const stmt = this.queryCache!.prepare(`
-        SELECT s.symbol_name, s.line_start, f.file_path, f.content
-        FROM symbols s
-        JOIN files f ON s.file_id = f.id
-        WHERE s.symbol_name = ? AND s.deleted_at IS NULL
-      `);
-
-      const rows = stmt.all(validated.symbol) as any[];
-
-      const references: SymbolReference[] = rows.map(row => {
-        const { anchor, preview } = extractPreviewWithAnchor(
-          row.file_path,
-          row.content,
-          row.line_start,
-          undefined, // No column information in schema
-          10
-        );
-
-        return {
-          symbol: row.symbol_name,
-          anchor,
-          preview,
-          isWrite: false // TODO: Determine read vs write from context
-        };
-      });
-
-      const output: FindReferencesOutput = {
-        symbol: validated.symbol,
-        total: references.length,
-        references
-      };
-
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(output, null, 2)
-        }]
-      };
-    } catch (error: any) {
-      if (error.message?.includes('CORRUPT')) {
-        throw new McpError(-32002, 'Index unavailable: Database is corrupted');
-      }
-      throw new McpError(-32603, `Find references failed: ${error.message}`);
-    }
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          symbol: validated.symbol,
+          total: 0,
+          references: [],
+          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
+        }, null, 2)
+      }]
+    };
   }
 
   /**
@@ -470,60 +389,17 @@ export class MCPServer {
   private async handleCallers(args: unknown): Promise<ToolResponse> {
     const validated = CallersInputSchema.parse(args);
 
-    this.ensureDatabase();
-
-    try {
-      const stmt = this.queryCache!.prepare(`
-        SELECT
-          source.symbol_name as caller_name,
-          target.symbol_name as callee_name,
-          xrefs.line_number,
-          f.file_path,
-          f.content
-        FROM xrefs
-        JOIN symbols source ON xrefs.source_symbol_id = source.id
-        JOIN symbols target ON xrefs.target_symbol_id = target.id
-        JOIN files f ON source.file_id = f.id
-        WHERE target.symbol_name = ? AND xrefs.reference_type = 'call'
-      `);
-
-      const rows = stmt.all(validated.symbol) as any[];
-
-      const callers: CallRelationship[] = rows.map(row => {
-        const { anchor, preview } = extractPreviewWithAnchor(
-          row.file_path,
-          row.content,
-          row.line_number || 1, // Use line_number from xrefs, default to 1 if null
-          undefined,
-          10
-        );
-
-        return {
-          caller: row.caller_name,
-          callee: row.callee_name,
-          anchor,
-          preview
-        };
-      });
-
-      const output: CallersOutput = {
-        symbol: validated.symbol,
-        total: callers.length,
-        callers
-      };
-
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(output, null, 2)
-        }]
-      };
-    } catch (error: any) {
-      if (error.message?.includes('CORRUPT')) {
-        throw new McpError(-32002, 'Index unavailable: Database is corrupted');
-      }
-      throw new McpError(-32603, `Find callers failed: ${error.message}`);
-    }
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          symbol: validated.symbol,
+          total: 0,
+          callers: [],
+          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
+        }, null, 2)
+      }]
+    };
   }
 
   /**
@@ -532,60 +408,17 @@ export class MCPServer {
   private async handleCallees(args: unknown): Promise<ToolResponse> {
     const validated = CalleesInputSchema.parse(args);
 
-    this.ensureDatabase();
-
-    try {
-      const stmt = this.queryCache!.prepare(`
-        SELECT
-          source.symbol_name as caller_name,
-          target.symbol_name as callee_name,
-          xrefs.line_number,
-          f.file_path,
-          f.content
-        FROM xrefs
-        JOIN symbols source ON xrefs.source_symbol_id = source.id
-        JOIN symbols target ON xrefs.target_symbol_id = target.id
-        JOIN files f ON source.file_id = f.id
-        WHERE source.symbol_name = ? AND xrefs.reference_type = 'call'
-      `);
-
-      const rows = stmt.all(validated.symbol) as any[];
-
-      const callees: CallRelationship[] = rows.map(row => {
-        const { anchor, preview } = extractPreviewWithAnchor(
-          row.file_path,
-          row.content,
-          row.line_number || 1, // Use line_number from xrefs, default to 1 if null
-          undefined,
-          10
-        );
-
-        return {
-          caller: row.caller_name,
-          callee: row.callee_name,
-          anchor,
-          preview
-        };
-      });
-
-      const output: CalleesOutput = {
-        symbol: validated.symbol,
-        total: callees.length,
-        callees
-      };
-
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(output, null, 2)
-        }]
-      };
-    } catch (error: any) {
-      if (error.message?.includes('CORRUPT')) {
-        throw new McpError(-32002, 'Index unavailable: Database is corrupted');
-      }
-      throw new McpError(-32603, `Find callees failed: ${error.message}`);
-    }
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          symbol: validated.symbol,
+          total: 0,
+          callees: [],
+          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
+        }, null, 2)
+      }]
+    };
   }
 
   /**
@@ -678,96 +511,17 @@ export class MCPServer {
   private async handleSymbols(args: unknown): Promise<ToolResponse> {
     const validated = SymbolsInputSchema.parse(args);
 
-    this.ensureDatabase();
-
-    try {
-      let stmt: Database.Statement;
-      let rows: any[];
-
-      if (validated.path) {
-        // Get symbols for specific file
-        stmt = this.queryCache!.prepare(`
-          SELECT s.symbol_name, s.symbol_type, s.line_start, f.file_path, f.content
-          FROM symbols s
-          JOIN files f ON s.file_id = f.id
-          WHERE f.file_path = ? AND s.deleted_at IS NULL
-        `);
-        rows = stmt.all(validated.path) as any[];
-      } else {
-        // Get all symbols
-        stmt = this.queryCache!.prepare(`
-          SELECT s.symbol_name, s.symbol_type, s.line_start, f.file_path, f.content
-          FROM symbols s
-          JOIN files f ON s.file_id = f.id
-          WHERE s.deleted_at IS NULL
-          LIMIT 1000
-        `);
-        rows = stmt.all() as any[];
-      }
-
-      const symbols: SymbolDefinition[] = rows.map(row => {
-        const { anchor, preview } = extractPreviewWithAnchor(
-          row.file_path,
-          row.content,
-          row.line_start,
-          undefined, // No column information in schema
-          10
-        );
-
-        return {
-          symbol: row.symbol_name,
-          kind: row.symbol_type,
-          anchor,
-          preview,
-          containerName: undefined // No container name in schema
-        };
-      });
-
-      const output: SymbolsOutput = {
-        path: validated.path,
-        total: symbols.length,
-        symbols
-      };
-
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(output, null, 2)
-        }]
-      };
-    } catch (error: any) {
-      if (error.message?.includes('CORRUPT')) {
-        throw new McpError(-32002, 'Index unavailable: Database is corrupted');
-      }
-      throw new McpError(-32603, `List symbols failed: ${error.message}`);
-    }
-  }
-
-  /**
-   * Ensure database is connected and configured
-   */
-  private ensureDatabase(): void {
-    if (this.db) return;
-
-    if (!existsSync(this.dbPath)) {
-      throw new McpError(
-        -32002,
-        'Index unavailable: Database not found. Run "code-index index" first.'
-      );
-    }
-
-    // Open database in readonly mode
-    this.db = new Database(this.dbPath, { readonly: true });
-
-    // Configure for concurrency
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('synchronous = NORMAL');
-    this.db.pragma('cache_size = -64000'); // 64MB cache
-
-    // Initialize query cache
-    this.queryCache = new QueryCache(this.db);
-
-    this.log('info', 'Database connected', { path: this.dbPath });
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          path: validated.path,
+          total: 0,
+          symbols: [],
+          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
+        }, null, 2)
+      }]
+    };
   }
 
   /**
@@ -783,11 +537,10 @@ export class MCPServer {
 
       await Promise.race([allRequests, timeout]);
 
-      // Close database
-      if (this.db) {
-        this.queryCache?.clear();
-        this.db.close();
-        this.log('info', 'Database closed');
+      // Cleanup services
+      if (this.hybridIndex) {
+        // No explicit cleanup needed for hybrid index
+        this.log('info', 'Hybrid index released');
       }
 
       // Flush logs
