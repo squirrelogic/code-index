@@ -299,9 +299,9 @@ export class MCPServer {
 
     try {
       const stmt = this.queryCache!.prepare(`
-        SELECT f.id, f.path, f.content, f.language
+        SELECT f.id, f.file_path, f.content, f.language
         FROM files_fts
-        JOIN files f ON files_fts.rowid = f.id
+        JOIN files f ON files_fts.file_id = f.id
         WHERE files_fts MATCH ?
         LIMIT ?
       `);
@@ -310,7 +310,7 @@ export class MCPServer {
 
       const results = rows.map(row => {
         const { anchor, preview } = extractPreviewWithAnchor(
-          row.path,
+          row.file_path,
           row.content,
           1, // We'll need to find actual line number from FTS match
           undefined,
@@ -350,10 +350,10 @@ export class MCPServer {
 
     try {
       const stmt = this.queryCache!.prepare(`
-        SELECT s.name, s.kind, s.line, s.column, s.container_name, f.path, f.content
+        SELECT s.symbol_name, s.symbol_type, s.line_start, f.file_path, f.content
         FROM symbols s
         JOIN files f ON s.file_id = f.id
-        WHERE s.name = ?
+        WHERE s.symbol_name = ? AND s.deleted_at IS NULL
         LIMIT 1
       `);
 
@@ -374,19 +374,19 @@ export class MCPServer {
       }
 
       const { anchor, preview } = extractPreviewWithAnchor(
-        row.path,
+        row.file_path,
         row.content,
-        row.line,
-        row.column,
+        row.line_start,
+        undefined, // No column information in schema
         10
       );
 
       const definition: SymbolDefinition = {
-        symbol: row.name,
-        kind: row.kind,
+        symbol: row.symbol_name,
+        kind: row.symbol_type,
         anchor,
         preview,
-        containerName: row.container_name
+        containerName: undefined // No container name in schema
       };
 
       const output: FindDefinitionOutput = {
@@ -419,25 +419,25 @@ export class MCPServer {
 
     try {
       const stmt = this.queryCache!.prepare(`
-        SELECT s.name, s.line, s.column, f.path, f.content
+        SELECT s.symbol_name, s.line_start, f.file_path, f.content
         FROM symbols s
         JOIN files f ON s.file_id = f.id
-        WHERE s.name = ?
+        WHERE s.symbol_name = ? AND s.deleted_at IS NULL
       `);
 
       const rows = stmt.all(validated.symbol) as any[];
 
       const references: SymbolReference[] = rows.map(row => {
         const { anchor, preview } = extractPreviewWithAnchor(
-          row.path,
+          row.file_path,
           row.content,
-          row.line,
-          row.column,
+          row.line_start,
+          undefined, // No column information in schema
           10
         );
 
         return {
-          symbol: row.name,
+          symbol: row.symbol_name,
           anchor,
           preview,
           isWrite: false // TODO: Determine read vs write from context
@@ -475,25 +475,25 @@ export class MCPServer {
     try {
       const stmt = this.queryCache!.prepare(`
         SELECT
-          caller.name as caller_name,
-          callee.name as callee_name,
-          cg.line,
-          f.path,
+          source.symbol_name as caller_name,
+          target.symbol_name as callee_name,
+          xrefs.line_number,
+          f.file_path,
           f.content
-        FROM call_graph cg
-        JOIN symbols caller ON cg.caller_id = caller.id
-        JOIN symbols callee ON cg.callee_id = callee.id
-        JOIN files f ON cg.file_id = f.id
-        WHERE callee.name = ?
+        FROM xrefs
+        JOIN symbols source ON xrefs.source_symbol_id = source.id
+        JOIN symbols target ON xrefs.target_symbol_id = target.id
+        JOIN files f ON source.file_id = f.id
+        WHERE target.symbol_name = ? AND xrefs.reference_type = 'call'
       `);
 
       const rows = stmt.all(validated.symbol) as any[];
 
       const callers: CallRelationship[] = rows.map(row => {
         const { anchor, preview } = extractPreviewWithAnchor(
-          row.path,
+          row.file_path,
           row.content,
-          row.line,
+          row.line_number || 1, // Use line_number from xrefs, default to 1 if null
           undefined,
           10
         );
@@ -537,25 +537,25 @@ export class MCPServer {
     try {
       const stmt = this.queryCache!.prepare(`
         SELECT
-          caller.name as caller_name,
-          callee.name as callee_name,
-          cg.line,
-          f.path,
+          source.symbol_name as caller_name,
+          target.symbol_name as callee_name,
+          xrefs.line_number,
+          f.file_path,
           f.content
-        FROM call_graph cg
-        JOIN symbols caller ON cg.caller_id = caller.id
-        JOIN symbols callee ON cg.callee_id = callee.id
-        JOIN files f ON cg.file_id = f.id
-        WHERE caller.name = ?
+        FROM xrefs
+        JOIN symbols source ON xrefs.source_symbol_id = source.id
+        JOIN symbols target ON xrefs.target_symbol_id = target.id
+        JOIN files f ON source.file_id = f.id
+        WHERE source.symbol_name = ? AND xrefs.reference_type = 'call'
       `);
 
       const rows = stmt.all(validated.symbol) as any[];
 
       const callees: CallRelationship[] = rows.map(row => {
         const { anchor, preview } = extractPreviewWithAnchor(
-          row.path,
+          row.file_path,
           row.content,
-          row.line,
+          row.line_number || 1, // Use line_number from xrefs, default to 1 if null
           undefined,
           10
         );
@@ -687,18 +687,19 @@ export class MCPServer {
       if (validated.path) {
         // Get symbols for specific file
         stmt = this.queryCache!.prepare(`
-          SELECT s.name, s.kind, s.line, s.column, s.container_name, f.path, f.content
+          SELECT s.symbol_name, s.symbol_type, s.line_start, f.file_path, f.content
           FROM symbols s
           JOIN files f ON s.file_id = f.id
-          WHERE f.path = ?
+          WHERE f.file_path = ? AND s.deleted_at IS NULL
         `);
         rows = stmt.all(validated.path) as any[];
       } else {
         // Get all symbols
         stmt = this.queryCache!.prepare(`
-          SELECT s.name, s.kind, s.line, s.column, s.container_name, f.path, f.content
+          SELECT s.symbol_name, s.symbol_type, s.line_start, f.file_path, f.content
           FROM symbols s
           JOIN files f ON s.file_id = f.id
+          WHERE s.deleted_at IS NULL
           LIMIT 1000
         `);
         rows = stmt.all() as any[];
@@ -706,19 +707,19 @@ export class MCPServer {
 
       const symbols: SymbolDefinition[] = rows.map(row => {
         const { anchor, preview } = extractPreviewWithAnchor(
-          row.path,
+          row.file_path,
           row.content,
-          row.line,
-          row.column,
+          row.line_start,
+          undefined, // No column information in schema
           10
         );
 
         return {
-          symbol: row.name,
-          kind: row.kind,
+          symbol: row.symbol_name,
+          kind: row.symbol_type,
           anchor,
           preview,
-          containerName: row.container_name
+          containerName: undefined // No container name in schema
         };
       });
 

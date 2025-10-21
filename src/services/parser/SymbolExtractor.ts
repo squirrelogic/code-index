@@ -173,21 +173,59 @@ export function extractParents(node: Parser.SyntaxNode): string[] {
 }
 
 /**
- * Extract function/method signature (T016)
+ * Extract symbol signature (T016)
+ *
+ * Extracts signatures for all symbol types, not just functions/methods.
+ * This provides content for embedding generation.
  *
  * @param node - Tree-sitter syntax node
  * @param source - Source code
- * @returns Function signature string or null
+ * @returns Symbol signature string or null
  */
 export function extractSignature(node: Parser.SyntaxNode, source: string): string | null {
-  // Only extract signatures for callable symbols
   const kind = getSymbolKind(node);
-  if (kind !== 'function' && kind !== 'method') {
-    return null;
-  }
+  if (!kind) return null;
 
-  // Try to extract the full signature from source
-  // Find the signature portion (up to the opening brace)
+  const name = extractSymbolName(node);
+
+  // Handle different symbol types
+  switch (kind) {
+    case 'function':
+    case 'method':
+      return extractFunctionSignature(node, source, name);
+
+    case 'class':
+      return extractClassSignature(node, source, name);
+
+    case 'interface':
+      return extractInterfaceSignature(node, source, name);
+
+    case 'type':
+      return extractTypeSignature(node, source, name);
+
+    case 'variable':
+    case 'constant':
+      return extractVariableSignature(node, source, name);
+
+    case 'property':
+      return extractPropertySignature(node, source, name);
+
+    case 'enum':
+      return extractEnumSignature(node, source, name);
+
+    default:
+      // For other types, extract the first line of the node
+      const text = source.substring(node.startIndex, node.endIndex);
+      const lines = text.split('\n');
+      const firstLine = lines[0] || text;
+      return firstLine.length > 200 ? firstLine.substring(0, 200) + '...' : firstLine;
+  }
+}
+
+/**
+ * Extract function/method signature
+ */
+function extractFunctionSignature(node: Parser.SyntaxNode, source: string, name: string): string | null {
   const signatureNode = node.children.find(child =>
     child.type === 'formal_parameters' ||
     child.type === 'parameters' // Python
@@ -197,10 +235,6 @@ export function extractSignature(node: Parser.SyntaxNode, source: string): strin
     return null;
   }
 
-  // Get function name
-  const name = extractSymbolName(node);
-
-  // Extract parameters
   const params = source.substring(signatureNode.startIndex, signatureNode.endIndex);
 
   // Try to find return type annotation (TypeScript)
@@ -213,10 +247,107 @@ export function extractSignature(node: Parser.SyntaxNode, source: string): strin
     returnType = source.substring(returnTypeNode.startIndex, returnTypeNode.endIndex);
   }
 
-  // Build signature
-  const signature = `function ${name}${params}${returnType}`;
+  return `function ${name}${params}${returnType}`;
+}
 
-  return signature;
+/**
+ * Extract class signature
+ */
+function extractClassSignature(node: Parser.SyntaxNode, source: string, name: string): string | null {
+  // Find extends/implements clauses
+  const heritage: string[] = [];
+
+  for (const child of node.children) {
+    if (child.type === 'class_heritage' || child.type === 'extends_clause' || child.type === 'implements_clause') {
+      heritage.push(source.substring(child.startIndex, child.endIndex));
+    }
+  }
+
+  const heritageStr = heritage.length > 0 ? ' ' + heritage.join(' ') : '';
+  return `class ${name}${heritageStr}`;
+}
+
+/**
+ * Extract interface signature
+ */
+function extractInterfaceSignature(node: Parser.SyntaxNode, source: string, name: string): string | null {
+  // Find extends clause
+  const extendsNode = node.children.find(child =>
+    child.type === 'extends_clause' || child.type === 'extends_type_clause'
+  );
+
+  const extendsStr = extendsNode
+    ? ' ' + source.substring(extendsNode.startIndex, extendsNode.endIndex)
+    : '';
+
+  return `interface ${name}${extendsStr}`;
+}
+
+/**
+ * Extract type alias signature
+ */
+function extractTypeSignature(node: Parser.SyntaxNode, source: string, name: string): string | null {
+  // Find the type definition
+  const typeNode = node.children.find(child =>
+    child.type === 'type' || child.type === 'type_annotation'
+  );
+
+  if (typeNode) {
+    const typeStr = source.substring(typeNode.startIndex, typeNode.endIndex);
+    // Limit length for complex types
+    const truncated = typeStr.length > 200 ? typeStr.substring(0, 200) + '...' : typeStr;
+    return `type ${name} = ${truncated}`;
+  }
+
+  return `type ${name}`;
+}
+
+/**
+ * Extract variable/constant signature
+ */
+function extractVariableSignature(node: Parser.SyntaxNode, source: string, _name: string): string | null {
+  // Get the full declarator node text
+  const declaratorText = source.substring(node.startIndex, node.endIndex);
+
+  // Find parent to determine if const/let/var
+  let declarationKeyword = 'var';
+  let parent = node.parent;
+  while (parent) {
+    if (parent.type === 'lexical_declaration' || parent.type === 'variable_declaration') {
+      const firstChild = parent.child(0);
+      if (firstChild && (firstChild.type === 'const' || firstChild.type === 'let' || firstChild.type === 'var')) {
+        declarationKeyword = firstChild.text;
+      }
+      break;
+    }
+    parent = parent.parent;
+  }
+
+  // Limit length for long initializers
+  const truncated = declaratorText.length > 200
+    ? declaratorText.substring(0, 200) + '...'
+    : declaratorText;
+
+  return `${declarationKeyword} ${truncated}`;
+}
+
+/**
+ * Extract property signature
+ */
+function extractPropertySignature(node: Parser.SyntaxNode, source: string, _name: string): string | null {
+  // Get the property definition
+  const propText = source.substring(node.startIndex, node.endIndex);
+  const lines = propText.split('\n');
+  const firstLine = lines[0] || propText;
+
+  return firstLine.length > 200 ? firstLine.substring(0, 200) + '...' : firstLine;
+}
+
+/**
+ * Extract enum signature
+ */
+function extractEnumSignature(_node: Parser.SyntaxNode, _source: string, name: string): string | null {
+  return `enum ${name}`;
 }
 
 /**

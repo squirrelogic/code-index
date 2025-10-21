@@ -93,8 +93,8 @@ export interface Symbol {
   /** Associated documentation */
   documentation: string | null;
 
-  /** Content hash for change detection */
-  hash: string;
+  /** Content hash for change detection (optional, not used with embedding_status tracking) */
+  hash?: string;
 
   /** Additional metadata */
   metadata: SymbolMetadata;

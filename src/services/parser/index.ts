@@ -12,7 +12,7 @@ import { extractSymbols } from './SymbolExtractor.js';
 import { extractImports, extractExports } from './ImportExportExtractor.js';
 import { extractComments } from './CommentExtractor.js';
 import { extractCalls } from './CallGraphExtractor.js';
-import { extractSemanticContent, generateHash } from './HashGenerator.js';
+// Hash generation removed - not needed with embedding_status tracking
 import type { ParseResult } from '../../models/ParseResult.js';
 
 /**
@@ -91,29 +91,15 @@ export async function parse(
     // 11. Extract function calls (T042)
     const calls = extractCalls(tree, source);
 
-    // 12. Generate content hashes for all symbols (T048)
-    const hashStartTime = Date.now();
-    for (const symbol of symbols) {
-      const semanticContent = extractSemanticContent(symbol, source);
-      symbol.hash = generateHash(semanticContent);
-    }
-    const hashDuration = Date.now() - hashStartTime;
-
-    // 13. Count lines and file size
+    // 12. Count lines and file size
     const lines = source.split('\n');
     const lineCount = lines.length;
     const fileSize = Buffer.byteLength(source, 'utf-8');
 
-    // 14. Calculate parse duration
+    // 13. Calculate parse duration
     const duration = Date.now() - startTime;
 
-    // Validate hash generation overhead (<5% requirement from SC-007)
-    const hashOverhead = (hashDuration / duration) * 100;
-    if (hashOverhead > 5) {
-      console.warn(`Hash generation overhead ${hashOverhead.toFixed(2)}% exceeds 5% target`);
-    }
-
-    // 15. Create ParseResult with metadata
+    // 14. Create ParseResult with metadata
     const result: ParseResult = {
       path: filePath,
       language,

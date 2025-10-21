@@ -7,7 +7,7 @@
 -- ============================================================================
 -- Files Table: Source code file metadata
 -- ============================================================================
-CREATE TABLE files (
+CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY NOT NULL,
     file_path TEXT NOT NULL,
     content_hash TEXT NOT NULL,
@@ -16,18 +16,19 @@ CREATE TABLE files (
     modified_at INTEGER NOT NULL,
     indexed_at INTEGER NOT NULL DEFAULT (unixepoch()),
     deleted_at INTEGER,
+    content TEXT,
     CHECK (modified_at <= indexed_at),
     CHECK (deleted_at IS NULL OR deleted_at >= indexed_at)
 );
 
 -- Unique index for file paths (excludes soft-deleted)
-CREATE UNIQUE INDEX idx_files_path ON files(file_path) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_files_path ON files(file_path) WHERE deleted_at IS NULL;
 
 -- Index for content hash lookups (deduplication)
-CREATE INDEX idx_files_hash ON files(content_hash) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_files_hash ON files(content_hash) WHERE deleted_at IS NULL;
 
 -- Index for language-based queries
-CREATE INDEX idx_files_language ON files(language) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_files_language ON files(language) WHERE deleted_at IS NULL;
 
 -- ============================================================================
 -- Meta Table: Schema version and configuration
@@ -59,7 +60,7 @@ CREATE UNIQUE INDEX idx_migration_version ON migration_history(version);
 -- ============================================================================
 -- Symbols Table: Code symbols with soft delete
 -- ============================================================================
-CREATE TABLE symbols (
+CREATE TABLE IF NOT EXISTS symbols (
     id TEXT PRIMARY KEY NOT NULL,
     file_id TEXT NOT NULL,
     symbol_name TEXT NOT NULL,
@@ -77,13 +78,13 @@ CREATE TABLE symbols (
 );
 
 -- Partial index for active symbols by name
-CREATE INDEX idx_symbols_name ON symbols(symbol_name) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(symbol_name) WHERE deleted_at IS NULL;
 
 -- Compound index for file + type lookups (leftmost prefix matching)
-CREATE INDEX idx_symbols_file_type ON symbols(file_id, symbol_type) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_symbols_file_type ON symbols(file_id, symbol_type) WHERE deleted_at IS NULL;
 
 -- Index for soft-delete cleanup queries
-CREATE INDEX idx_symbols_deleted ON symbols(deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_symbols_deleted ON symbols(deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- ============================================================================
 -- Cross-Reference Table: Symbol usage relationships
@@ -113,13 +114,48 @@ CREATE INDEX idx_xrefs_source ON xrefs(source_symbol_id);
 CREATE INDEX idx_xrefs_type ON xrefs(reference_type, target_symbol_id);
 
 -- ============================================================================
--- Search Table: FTS5 virtual table for full-text search
+-- Files FTS Table: FTS5 virtual table for full-text search on files
 -- ============================================================================
-CREATE VIRTUAL TABLE search USING fts5(
-    content,                  -- Searchable: code content
-    documentation,            -- Searchable: documentation/comments
+CREATE VIRTUAL TABLE files_fts USING fts5(
+    file_path,               -- Searchable: file path
+    content,                 -- Searchable: file content
     file_id UNINDEXED,       -- Not searchable: for JOIN with files table
-    symbol_id UNINDEXED,     -- Not searchable: for JOIN with symbols table
-    file_path UNINDEXED,     -- Not searchable: display only
-    tokenize = 'unicode61 remove_diacritics 1 tokenchars "_."'
+    tokenize = 'porter unicode61'
 );
+
+-- ============================================================================
+-- FTS Sync Triggers: Keep files_fts in sync with files table
+-- ============================================================================
+
+-- Trigger: Insert new file into FTS index
+CREATE TRIGGER files_fts_insert AFTER INSERT ON files
+WHEN new.deleted_at IS NULL AND new.content IS NOT NULL
+BEGIN
+    INSERT INTO files_fts(file_path, content, file_id)
+    VALUES (new.file_path, new.content, new.id);
+END;
+
+-- Trigger: Update file in FTS index
+CREATE TRIGGER files_fts_update AFTER UPDATE ON files
+WHEN new.deleted_at IS NULL AND new.content IS NOT NULL
+BEGIN
+    INSERT INTO files_fts(files_fts, file_path, content, file_id)
+    VALUES ('delete', old.file_path, old.content, old.id);
+    INSERT INTO files_fts(file_path, content, file_id)
+    VALUES (new.file_path, new.content, new.id);
+END;
+
+-- Trigger: Remove soft-deleted or content-less files from FTS index
+CREATE TRIGGER files_fts_delete AFTER UPDATE ON files
+WHEN new.deleted_at IS NOT NULL OR new.content IS NULL
+BEGIN
+    INSERT INTO files_fts(files_fts, file_path, content, file_id)
+    VALUES ('delete', old.file_path, old.content, old.id);
+END;
+
+-- Trigger: Remove hard-deleted files from FTS index
+CREATE TRIGGER files_fts_hard_delete AFTER DELETE ON files
+BEGIN
+    INSERT INTO files_fts(files_fts, file_path, content, file_id)
+    VALUES ('delete', old.file_path, old.content, old.id);
+END;

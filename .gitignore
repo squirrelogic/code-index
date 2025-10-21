@@ -76,6 +76,8 @@ docs/_build/
 .codeindex/index.db-shm
 .codeindex/models/
 .codeindex/cache/
+.codeindex/ast/
+.codeindex/vectors/
 
 # Test artifacts
 .codeindex-test-config/

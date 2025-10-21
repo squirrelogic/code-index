@@ -170,8 +170,30 @@ export class ConfigurationManager {
 
 	/**
 	 * Get default ONNX configuration
+	 * Reads from .codeindex/config.json if available
 	 */
 	private getDefaultOnnxConfig(): Result<OnnxAdapterConfig, ConfigError> {
+		// Try to read from config.json
+		try {
+			const configPath = '.codeindex/config.json';
+			if (require('fs').existsSync(configPath)) {
+				const configData = JSON.parse(require('fs').readFileSync(configPath, 'utf-8'));
+				if (configData.profile && configData.profile.model) {
+					// Use the model from config.json
+					const modelName = configData.profile.model.split('/')[1] || 'all-MiniLM-L6-v2';
+					return ok({
+						type: 'onnx',
+						modelPath: `.codeindex/models/${modelName}.onnx`,
+						threads: 4,
+						debug: false,
+					});
+				}
+			}
+		} catch (error) {
+			// Fall through to default if config reading fails
+		}
+
+		// Fallback to hardcoded default
 		return ok({
 			type: 'onnx',
 			modelPath: '.codeindex/models/all-MiniLM-L6-v2.onnx',

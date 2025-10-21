@@ -2,7 +2,7 @@
  * MCP (Model Context Protocol) configuration generator
  */
 
-import { join } from 'path';
+// import { join } from 'path';
 
 /**
  * MCP server configuration
@@ -18,21 +18,21 @@ export interface MCPServerConfig {
  */
 export interface MCPConfig {
   version: string;
-  servers: Record<string, MCPServerConfig>;
+  mcpServers: Record<string, MCPServerConfig>;
 }
 
 /**
  * Generates default MCP configuration
  */
 export function generateMCPConfig(projectRoot: string): MCPConfig {
-  const codeIndexPath = join(projectRoot, 'node_modules', '.bin', 'code-index');
+  const codeIndexPath = 'code-index'; //join(projectRoot, 'node_modules', '.bin', 'code-index');
 
   return {
     version: '1.0.0',
-    servers: {
+    mcpServers: {
       'code-index': {
         command: codeIndexPath,
-        args: ['mcp-server'],
+        args: ['serve'],
         env: {
           PROJECT_ROOT: projectRoot
         }
