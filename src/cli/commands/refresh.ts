@@ -22,6 +22,7 @@ interface RefreshCommandOptions {
   batchSize?: number;
   followSymlinks?: boolean;
   format?: 'human' | 'json';
+  quiet?: boolean;
 }
 
 export function createRefreshCommand(): Command {
@@ -30,6 +31,7 @@ export function createRefreshCommand(): Command {
     .option('-v, --verbose', 'Show detailed progress information')
     .option('-b, --batch-size <size>', 'Number of files to process per batch', '100')
     .option('-s, --follow-symlinks', 'Follow symbolic links during refresh')
+    .option('-q, --quiet', 'Suppress warnings')
     .option('--format <type>', 'Output format (human or json)', 'human')
     .action(async (options: RefreshCommandOptions) => {
       const cwd = process.cwd();
@@ -157,7 +159,7 @@ export function createRefreshCommand(): Command {
           );
           console.log(`  Database size:    ${sizeFormatted}`);
 
-          if (result.errors.length > 0) {
+          if (!options.quiet && result.errors.length > 0) {
             console.log('');
             console.log(chalk.yellow('⚠ Warnings:'));
             result.errors.slice(0, 10).forEach(err => {

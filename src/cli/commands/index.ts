@@ -23,6 +23,7 @@ interface IndexCommandOptions {
   batchSize?: number;
   followSymlinks?: boolean;
   format?: 'human' | 'json';
+  quiet?: boolean;
 }
 
 export function createIndexCommand(): Command {
@@ -32,6 +33,7 @@ export function createIndexCommand(): Command {
     .option('-f, --force', 'Force re-indexing even if index exists')
     .option('-b, --batch-size <size>', 'Number of files to process per batch', '100')
     .option('-s, --follow-symlinks', 'Follow symbolic links during indexing')
+    .option('-q, --quiet', 'Suppress warnings and performance messages')
     .option('--format <type>', 'Output format (human or json)', 'human')
     .action(async (options: IndexCommandOptions) => {
       const cwd = process.cwd();
@@ -150,7 +152,7 @@ export function createIndexCommand(): Command {
             `  Database size:    ${chalk.cyan(formatBytes(stats.dbSizeBytes))}`
           );
 
-          if (result.errors.length > 0) {
+          if (!options.quiet && result.errors.length > 0) {
             console.log('');
             console.log(chalk.yellow('⚠ Warnings:'));
             result.errors.slice(0, 5).forEach(error => {
@@ -161,21 +163,15 @@ export function createIndexCommand(): Command {
             }
           }
 
-          // Performance assessment
-          console.log('');
-          if (result.filesPerSecond >= 1000) {
-            console.log(
-              chalk.green('✓') + ' Performance target met (≥1000 files/second)'
-            );
-          } else if (result.filesPerSecond >= 500) {
+          // Performance assessment (skip for hybrid search with ONNX - it's expected to be slower)
+          if (!options.quiet && result.filesPerSecond < 50) {
+            console.log('');
             console.log(
               chalk.yellow('⚠') +
-                ` Performance below target: ${Math.round(result.filesPerSecond)} files/second (target: 1000)`
+                ` Slow indexing: ${Math.round(result.filesPerSecond)} files/second`
             );
-          } else {
             console.log(
-              chalk.red('✗') +
-                ` Performance issue: ${Math.round(result.filesPerSecond)} files/second (target: 1000)`
+              chalk.dim('  Note: Neural embedding generation is CPU-intensive')
             );
           }
         }
