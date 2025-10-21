@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { DatabaseService } from '../../services/database.js';
 import { downloadGteSmallModel } from '../../services/onnx-embedder.js';
@@ -45,6 +45,7 @@ export function createInitCommand(): Command {
             directories_created: result.directoriesCreated,
             files_created: result.filesCreated,
             model_downloaded: result.modelDownloaded,
+            gitignore_updated: result.gitignoreUpdated,
           });
         } else {
           output.error('Failed to initialize code-index', result.error);
@@ -64,7 +65,52 @@ interface InitResult {
   directoriesCreated: string[];
   filesCreated: string[];
   modelDownloaded: boolean;
+  gitignoreUpdated: boolean;
   error?: any;
+}
+
+/**
+ * Update .gitignore with code-index paths
+ */
+function updateGitignore(projectRoot: string): boolean {
+  const gitignorePath = join(projectRoot, '.gitignore');
+  const codeIndexPaths = [
+    '',
+    '# Code-index specific',
+    '.codeindex/logs/',
+    '.codeindex/*.log',
+    '.codeindex/index.db-wal',
+    '.codeindex/index.db-shm',
+    '.codeindex/models/',
+    '.codeindex/cache/',
+    '.codeindex/ast/',
+    '.codeindex/vectors/',
+  ];
+
+  try {
+    let gitignoreContent = '';
+    if (existsSync(gitignorePath)) {
+      gitignoreContent = readFileSync(gitignorePath, 'utf-8');
+    }
+
+    // Check if code-index section already exists
+    if (gitignoreContent.includes('# Code-index specific')) {
+      return false; // Already updated
+    }
+
+    // Ensure file ends with newline before appending
+    if (gitignoreContent.length > 0 && !gitignoreContent.endsWith('\n')) {
+      gitignoreContent += '\n';
+    }
+
+    // Append code-index section
+    const codeIndexSection = codeIndexPaths.join('\n') + '\n';
+    appendFileSync(gitignorePath, codeIndexSection);
+    return true;
+  } catch (error) {
+    console.error(`Warning: Could not update .gitignore: ${error}`);
+    return false;
+  }
 }
 
 async function initializeProject(
@@ -76,6 +122,7 @@ async function initializeProject(
     directoriesCreated: [],
     filesCreated: [],
     modelDownloaded: false,
+    gitignoreUpdated: false,
   };
 
   try {
@@ -171,6 +218,9 @@ async function initializeProject(
       writeFileSync(mcpConfigPath, mcpConfigContent);
       result.filesCreated.push(mcpConfigPath);
     }
+
+    // Update .gitignore with code-index paths
+    result.gitignoreUpdated = updateGitignore(projectRoot);
 
     result.success = true;
     return result;
