@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 import { OutputFormatter, OutputFormat } from './utils/output.js';
+import packageJson from '../../package.json' with { type: 'json' };
 
 const program = new Command();
 const output = new OutputFormatter();
@@ -9,7 +10,7 @@ const output = new OutputFormatter();
 program
   .name('code-index')
   .description('A CLI tool for local code indexing and search using SQLite')
-  .version('1.0.0')
+  .version(packageJson.version)
   .option('--json', 'Output results in JSON format')
   .option('-v, --verbose', 'Enable verbose logging')
   .option('-q, --quiet', 'Suppress non-error output')
