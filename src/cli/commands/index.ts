@@ -65,7 +65,7 @@ export function createIndexCommand(): Command {
             fileCount: existingCount,
           });
           database.close();
-          process.exit(1);
+          return;
         }
 
         // Initialize hybrid index components
@@ -178,9 +178,6 @@ export function createIndexCommand(): Command {
             );
           }
         }
-
-        // Exit with appropriate code
-        process.exit(result.errors.length > 0 ? 1 : 0);
       } catch (error) {
         logger.error('indexing-failed', {
           error: String(error),
@@ -190,8 +187,6 @@ export function createIndexCommand(): Command {
         formatter.error('Indexing failed', {
           message: error instanceof Error ? error.message : String(error),
         });
-
-        process.exit(1);
       }
     });
 }
