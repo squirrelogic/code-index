@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { DatabaseService } from '../../services/database.js';
 import { SearchService } from '../../services/searcher.js';
 import { HybridIndex } from '../../services/hybrid-index.js';
+import { SymbolIndex } from '../../services/symbol-index.js';
 import { ASTPersistenceService } from '../../services/ast-persistence.js';
 import { OnnxEmbedder } from '../../services/onnx-embedder.js';
 import { IndexStoreService } from '../../services/index-store.js';
@@ -90,7 +91,8 @@ async function executeSearch(
     );
   }
 
-  const searchService = new SearchService(hybridIndex, astPersistence);
+  const symbolIndex = new SymbolIndex();
+  const searchService = new SearchService(hybridIndex, symbolIndex, astPersistence);
 
   // Perform search
   const startTime = Date.now();
@@ -136,13 +138,28 @@ async function executeSearch(
       console.log(chalk.gray(`   Anchor: ${result.anchor}`));
 
       // Show first few symbols if AST available
-      if (result.ast && result.ast.symbols.length > 0) {
-        const symbols = result.ast.symbols.slice(0, 3);
-        console.log(
-          chalk.dim(
-            `   Symbols: ${symbols.map(s => `${s.kind} ${s.name}`).join(', ')}`
-          )
-        );
+      if (result.ast) {
+        const symbols: Array<{ kind: string; name: string }> = [];
+
+        // Collect symbols from all categories
+        if (result.ast.functions) {
+          for (const name of Object.keys(result.ast.functions).slice(0, 3)) {
+            symbols.push({ kind: 'function', name });
+          }
+        }
+        if (result.ast.classes && symbols.length < 3) {
+          for (const name of Object.keys(result.ast.classes).slice(0, 3 - symbols.length)) {
+            symbols.push({ kind: 'class', name });
+          }
+        }
+
+        if (symbols.length > 0) {
+          console.log(
+            chalk.dim(
+              `   Symbols: ${symbols.map(s => `${s.kind} ${s.name}`).join(', ')}`
+            )
+          );
+        }
       }
 
       console.log();

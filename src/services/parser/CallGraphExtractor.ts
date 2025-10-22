@@ -1,17 +1,18 @@
 /**
  * Call Graph Extraction
  *
- * Extracts function calls and method invocations to build usage graphs
- * and track function references.
+ * Extracts function calls and method invocations to build call graph
+ * relationships in ASTDocBuilder.
  */
 
 import type Parser from 'tree-sitter';
-import type { FunctionCall, CallKind, Span } from '../../models/ParseResult.js';
+import type { ASTDocBuilder } from './ASTDocBuilder.js';
 
 /**
  * Map of Tree-sitter node types to call kinds
- * Covers TypeScript, JavaScript, and Python call patterns
  */
+type CallKind = 'function' | 'method' | 'constructor' | 'super' | 'dynamic';
+
 const CALL_NODE_TYPES: Record<string, CallKind> = {
   'call_expression': 'function', // foo() or obj.method() - will be refined
   'new_expression': 'constructor', // new Foo()
@@ -19,10 +20,7 @@ const CALL_NODE_TYPES: Record<string, CallKind> = {
 };
 
 /**
- * Check if a Tree-sitter node represents a function call (T039)
- *
- * @param node - Tree-sitter syntax node
- * @returns True if node is a call
+ * Check if a Tree-sitter node represents a function call
  */
 export function isCallNode(node: Parser.SyntaxNode): boolean {
   // Direct call expressions
@@ -39,56 +37,7 @@ export function isCallNode(node: Parser.SyntaxNode): boolean {
 }
 
 /**
- * Determine the call kind for a node
- *
- * @param node - Tree-sitter syntax node
- * @returns Call kind
- */
-export function getCallKind(node: Parser.SyntaxNode): CallKind {
-  // Python call
-  if (node.type === 'call') {
-    return 'function'; // Will be refined to method if receiver exists
-  }
-
-  // New expression
-  if (node.type === 'new_expression') {
-    return 'constructor';
-  }
-
-  // Super call
-  if (node.type === 'super') {
-    return 'super';
-  }
-
-  // Call expression - need to check if it's a method call or function call
-  if (node.type === 'call_expression') {
-    const functionNode = node.childForFieldName('function');
-
-    if (functionNode) {
-      // Check for member expression (obj.method())
-      if (functionNode.type === 'member_expression') {
-        return 'method';
-      }
-
-      // Check for subscript expression (computed property - obj[key]())
-      if (functionNode.type === 'subscript_expression' ||
-          functionNode.type === 'computed_member_expression') {
-        return 'dynamic';
-      }
-    }
-
-    return 'function';
-  }
-
-  // Default
-  return 'function';
-}
-
-/**
- * Extract callee name from a call node (T040)
- *
- * @param node - Tree-sitter call node
- * @returns Callee name (function/method being called)
+ * Extract callee name from a call node
  */
 export function extractCalleeName(node: Parser.SyntaxNode): string {
   // Handle new expressions: new Foo()
@@ -170,232 +119,114 @@ export function extractCalleeName(node: Parser.SyntaxNode): string {
 }
 
 /**
- * Extract receiver (object) for method calls (T040)
- *
- * @param node - Tree-sitter call node
- * @returns Receiver name or undefined for function calls
+ * Find the enclosing function/method name for a call
  */
-export function extractReceiver(node: Parser.SyntaxNode): string | undefined {
-  // Only relevant for method calls
+function findEnclosingFunction(node: Parser.SyntaxNode): string | null {
+  let current = node.parent;
 
-  // Python attribute calls
-  if (node.type === 'call') {
-    const functionNode = node.childForFieldName('function');
-    if (functionNode && functionNode.type === 'attribute') {
-      const objectNode = functionNode.childForFieldName('object');
-      if (objectNode) {
-        return objectNode.text;
+  while (current) {
+    // Check for function declaration
+    if (current.type === 'function_declaration' ||
+        current.type === 'function_definition' ||
+        current.type === 'generator_function_declaration') {
+      const nameNode = current.childForFieldName('name');
+      if (nameNode) {
+        return nameNode.text;
       }
     }
-    return undefined;
-  }
 
-  // JavaScript/TypeScript call expressions
-  if (node.type === 'call_expression') {
-    const functionNode = node.childForFieldName('function');
-
-    if (!functionNode) {
-      return undefined;
-    }
-
-    // Method call: obj.method()
-    if (functionNode.type === 'member_expression') {
-      const objectNode = functionNode.childForFieldName('object');
-      if (objectNode) {
-        return objectNode.text;
+    // Check for method definition
+    if (current.type === 'method_definition') {
+      const nameNode = current.childForFieldName('name');
+      if (nameNode) {
+        // Get class name too
+        const className = findEnclosingClass(current);
+        if (className) {
+          return `${className}.${nameNode.text}`;
+        }
+        return nameNode.text;
       }
     }
-  }
 
-  return undefined;
-}
-
-/**
- * Count the number of arguments in a call (T040)
- *
- * @param node - Tree-sitter call node
- * @returns Number of arguments
- */
-export function countArguments(node: Parser.SyntaxNode): number {
-  // Find arguments node
-  const argsNode = node.childForFieldName('arguments') ||
-                   node.children.find(child =>
-                     child.type === 'arguments' ||
-                     child.type === 'argument_list'
-                   );
-
-  if (!argsNode) {
-    return 0;
-  }
-
-  // Count non-punctuation children (actual arguments)
-  let count = 0;
-  for (const child of argsNode.children) {
-    // Skip punctuation like '(', ')', ','
-    if (child.type !== '(' && child.type !== ')' && child.type !== ',') {
-      count++;
-    }
-  }
-
-  return count;
-}
-
-/**
- * Extract location span from a Tree-sitter node
- *
- * @param node - Tree-sitter syntax node
- * @returns Span with line, column, and byte offsets
- */
-export function extractSpan(node: Parser.SyntaxNode): Span {
-  return {
-    startLine: node.startPosition.row + 1, // 1-indexed
-    startColumn: node.startPosition.column, // 0-indexed
-    endLine: node.endPosition.row + 1, // 1-indexed
-    endColumn: node.endPosition.column, // 0-indexed
-    startByte: node.startIndex,
-    endByte: node.endIndex,
-  };
-}
-
-/**
- * Check if a call is part of a method chain (T041)
- *
- * @param node - Tree-sitter call node
- * @returns True if part of a chain
- */
-export function isPartOfChain(node: Parser.SyntaxNode): boolean {
-  // Check if this call has a previous call in the chain
-  if (node.type === 'call_expression') {
-    const functionNode = node.childForFieldName('function');
-    if (functionNode && functionNode.type === 'member_expression') {
-      const objectNode = functionNode.childForFieldName('object');
-      // If the object is also a call expression, we're in a chain
-      if (objectNode && objectNode.type === 'call_expression') {
-        return true;
-      }
-    }
-  }
-
-  // Check if this call has a next call in the chain
-  // (parent is a member expression whose parent is a call)
-  let parent = node.parent;
-  if (parent && parent.type === 'member_expression') {
-    const grandparent = parent.parent;
-    if (grandparent && grandparent.type === 'call_expression') {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * Extract call chain context (T041)
- *
- * @param node - Tree-sitter call node
- * @param allCalls - All extracted calls (for reference)
- * @returns Call chain context or undefined
- */
-export function extractCallChain(
-  node: Parser.SyntaxNode,
-  allCalls: Array<{ node: Parser.SyntaxNode; callee: string }>
-): import('../../models/ParseResult.js').CallChain | undefined {
-  if (!isPartOfChain(node)) {
-    return undefined;
-  }
-
-  const chain: import('../../models/ParseResult.js').CallChain = {
-    position: 0,
-  };
-
-  // Find previous call in chain
-  if (node.type === 'call_expression') {
-    const functionNode = node.childForFieldName('function');
-    if (functionNode && functionNode.type === 'member_expression') {
-      const objectNode = functionNode.childForFieldName('object');
-      if (objectNode && objectNode.type === 'call_expression') {
-        // Find the call in our list
-        const prevCall = allCalls.find(c => c.node === objectNode);
-        if (prevCall) {
-          chain.previous = prevCall.callee;
-          // Position is one more than previous
-          const prevChain = extractCallChain(objectNode, allCalls);
-          chain.position = prevChain ? prevChain.position + 1 : 1;
+    // Check for arrow function assigned to variable
+    if (current.type === 'variable_declarator') {
+      const nameNode = current.childForFieldName('name');
+      if (nameNode) {
+        const valueNode = current.childForFieldName('value');
+        if (valueNode && valueNode.type === 'arrow_function') {
+          return nameNode.text;
         }
       }
     }
+
+    current = current.parent;
   }
 
-  // Find next call in chain
-  let parent = node.parent;
-  if (parent && parent.type === 'member_expression') {
-    const grandparent = parent.parent;
-    if (grandparent && grandparent.type === 'call_expression') {
-      const nextCall = allCalls.find(c => c.node === grandparent);
-      if (nextCall) {
-        chain.next = nextCall.callee;
-      }
-    }
-  }
-
-  return chain;
+  return null;
 }
 
 /**
- * Extract function calls from parsed tree (T042)
- *
- * @param tree - Tree-sitter parse tree
- * @param source - Source code content
- * @returns Array of function calls
+ * Find the enclosing class name
  */
-export function extractCalls(tree: Parser.Tree, _source: string): FunctionCall[] {
-  const calls: FunctionCall[] = [];
-  // Temporary storage for chain analysis
-  const callNodes: Array<{ node: Parser.SyntaxNode; callee: string }> = [];
+function findEnclosingClass(node: Parser.SyntaxNode): string | null {
+  let current = node.parent;
 
+  while (current) {
+    if (current.type === 'class_declaration' || current.type === 'class_definition') {
+      const nameNode = current.childForFieldName('name');
+      if (nameNode) {
+        return nameNode.text;
+      }
+    }
+    current = current.parent;
+  }
+
+  return null;
+}
+
+/**
+ * Extract function calls and build call graph in ASTDocBuilder
+ *
+ * Walks the tree to find all function calls, determines the caller
+ * context, and records the relationships in the builder.
+ */
+export function extractCallGraph(
+  tree: Parser.Tree,
+  _source: string,
+  builder: ASTDocBuilder
+): void {
   /**
-   * First pass: collect all call nodes
+   * Recursive walker to find all calls
    */
-  function collectCalls(node: Parser.SyntaxNode): void {
+  function walkNode(node: Parser.SyntaxNode): void {
     // Check if this node is a call
     if (isCallNode(node)) {
       const callee = extractCalleeName(node);
-      callNodes.push({ node, callee });
+
+      // Skip if we couldn't determine the callee
+      if (callee === '<unknown>' || callee === '<dynamic>') {
+        // Continue walking children
+        for (const child of node.children) {
+          walkNode(child);
+        }
+        return;
+      }
+
+      // Find the function/method making this call
+      const caller = findEnclosingFunction(node);
+
+      // Record the relationship if we found a caller
+      if (caller) {
+        builder.recordCall(caller, callee);
+      }
     }
 
     // Recursively walk children
     for (const child of node.children) {
-      collectCalls(child);
+      walkNode(child);
     }
   }
 
-  /**
-   * Second pass: build FunctionCall objects with chain context
-   */
-  function buildCalls(): void {
-    for (const { node, callee } of callNodes) {
-      const kind = getCallKind(node);
-      const receiver = extractReceiver(node);
-      const argumentCount = countArguments(node);
-      const span = extractSpan(node);
-      const chain = extractCallChain(node, callNodes);
-
-      const call: FunctionCall = {
-        callee,
-        kind,
-        receiver,
-        argumentCount,
-        span,
-        chain,
-      };
-
-      calls.push(call);
-    }
-  }
-
-  // Execute two-pass extraction
-  collectCalls(tree.rootNode);
-  buildCalls();
-
-  return calls;
+  // Start walking from root node
+  walkNode(tree.rootNode);
 }

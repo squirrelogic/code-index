@@ -3,17 +3,19 @@
  *
  * Main entry point for the parser service. Provides structured code analysis
  * for TypeScript, JavaScript, JSX, TSX, and Python files.
+ *
+ * Returns ASTDoc - the unified AST representation.
  */
 
 import { promises as fs } from 'fs';
 import { detectLanguage, loadGrammar } from './LanguageLoader.js';
 import { TreeSitterParser } from './TreeSitterParser.js';
 import { extractSymbols } from './SymbolExtractor.js';
-import { extractImports, extractExports } from './ImportExportExtractor.js';
+import { extractImportsExports } from './ImportExportExtractor.js';
 import { extractComments } from './CommentExtractor.js';
-import { extractCalls } from './CallGraphExtractor.js';
-// Hash generation removed - not needed with embedding_status tracking
-import type { ParseResult } from '../../models/ParseResult.js';
+import { extractCallGraph } from './CallGraphExtractor.js';
+import { ASTDocBuilder } from './ASTDocBuilder.js';
+import type { ASTDoc, Language } from '../../models/ASTDoc.js';
 
 /**
  * Parse options for customizing parser behavior
@@ -33,21 +35,19 @@ export interface ParseOptions {
  * Main parser interface
  *
  * Analyzes source files and extracts structured information including symbols,
- * imports/exports, function calls, comments, and content hashes.
+ * imports/exports, function calls, and comments.
  *
  * @param filePath - Absolute path to the file to parse
  * @param options - Optional parsing configuration
- * @returns Complete parse result with all extracted entities
+ * @returns Complete ASTDoc with all extracted entities
  */
 export async function parse(
   filePath: string,
   options?: ParseOptions
-): Promise<ParseResult> {
-  const startTime = Date.now();
-
+): Promise<ASTDoc> {
   try {
-    // 1. Detect language from file path (before reading file)
-    const language = detectLanguage(filePath);
+    // 1. Detect language from file path
+    const language = detectLanguage(filePath) as Language;
 
     // 2. Read file content (or use provided content)
     const source = options?.content !== undefined
@@ -64,70 +64,62 @@ export async function parse(
     // 5. Parse source code
     const tree = parser.parse(source);
 
-    // 6. Extract syntax errors (with recovery info)
-    const errors = parser.extractErrors(tree, source);
+    // 6. Calculate file statistics
+    const lineCount = source.split('\n').length;
+    const fileSize = Buffer.byteLength(source, 'utf-8');
 
-    // 7. Extract symbols (T019)
-    const symbols = extractSymbols(tree, source);
+    // 7. Initialize ASTDoc builder
+    const builder = new ASTDocBuilder(filePath, language, fileSize);
 
-    // 8. Extract imports and exports (T028)
-    const imports = extractImports(tree, source);
-    const exports = extractExports(tree, source);
+    // 8. Extract symbols (functions, classes, interfaces, etc.)
+    extractSymbols(tree, source, builder);
 
-    // 9. Extract comments and documentation (T036)
-    const comments = extractComments(tree, source, symbols);
+    // 9. Extract imports and exports
+    extractImportsExports(tree, source, builder);
 
-    // 10. Associate documentation with symbols
-    // Update symbol.documentation field for symbols with associated comments
-    for (const comment of comments) {
-      if (comment.associatedSymbol) {
-        const symbol = symbols.find(s => s.name === comment.associatedSymbol);
-        if (symbol) {
-          symbol.documentation = comment.text;
-        }
+    // 10. Extract comments and documentation
+    extractComments(tree, source, builder);
+
+    // 11. Extract call graph relationships
+    extractCallGraph(tree, source, builder);
+
+    // 12. Extract syntax errors (if any)
+    if (tree.rootNode.hasError) {
+      const errors = parser.extractErrors(tree, source);
+      for (const error of errors) {
+        builder.addError(error);
       }
     }
 
-    // 11. Extract function calls (T042)
-    const calls = extractCalls(tree, source);
+    // 13. Build final ASTDoc
+    const astDoc = builder.build(lineCount, '1.0.0');
 
-    // 12. Count lines and file size
-    const lines = source.split('\n');
-    const lineCount = lines.length;
-    const fileSize = Buffer.byteLength(source, 'utf-8');
-
-    // 13. Calculate parse duration
-    const duration = Date.now() - startTime;
-
-    // 14. Create ParseResult with metadata
-    const result: ParseResult = {
-      path: filePath,
-      language,
-      symbols,
-      imports,
-      exports,
-      calls,
-      comments,
-      errors,
-      metadata: {
-        parsedAt: new Date().toISOString(),
-        duration,
-        lineCount,
-        fileSize,
-        incremental: options?.incremental ?? false,
-        parserVersion: '1.0.0',
-      },
-    };
-
-    // Clean up parser resources
+    // 14. Clean up parser resources
     parser.cleanup();
 
-    return result;
+    return astDoc;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to parse ${filePath}: ${errorMessage}`);
   }
 }
 
-// Re-export all types from ParseResult for convenience
-export * from '../../models/ParseResult.js';
+/**
+ * Parse source code directly without reading from file
+ *
+ * @param source - Source code content
+ * @param filePath - Path for reference (doesn't need to exist)
+ * @param language - Language to parse as
+ * @returns ASTDoc
+ */
+export async function parseSource(
+  source: string,
+  filePath: string,
+  _language: Language
+): Promise<ASTDoc> {
+  return parse(filePath, { content: source });
+}
+
+// Re-export types for convenience
+export * from '../../models/ASTDoc.js';
+export { ASTDocBuilder } from './ASTDocBuilder.js';

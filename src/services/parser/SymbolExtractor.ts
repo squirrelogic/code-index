@@ -2,11 +2,30 @@
  * Symbol Extraction Logic
  *
  * Extracts symbols (functions, classes, variables, etc.) from Tree-sitter
- * parse tree with hierarchical relationships and metadata.
+ * parse tree and populates ASTDocBuilder.
  */
 
 import type Parser from 'tree-sitter';
-import type { Symbol, SymbolKind } from '../../models/ParseResult.js';
+import type { ASTDocBuilder } from './ASTDocBuilder.js';
+import type { Span } from '../../models/ASTDoc.js';
+
+/**
+ * Symbol kinds we recognize
+ */
+type SymbolKind =
+  | 'function'
+  | 'class'
+  | 'variable'
+  | 'interface'
+  | 'enum'
+  | 'type'
+  | 'constant'
+  | 'method'
+  | 'property'
+  | 'module'
+  | 'namespace'
+  | 'import'
+  | 'export';
 
 /**
  * Map of Tree-sitter node types to symbol kinds
@@ -52,9 +71,6 @@ const SYMBOL_NODE_TYPES: Record<string, SymbolKind> = {
 
 /**
  * Check if a Tree-sitter node represents a symbol
- *
- * @param node - Tree-sitter syntax node
- * @returns True if node is a symbol
  */
 export function isSymbolNode(node: Parser.SyntaxNode): boolean {
   return SYMBOL_NODE_TYPES.hasOwnProperty(node.type);
@@ -62,9 +78,6 @@ export function isSymbolNode(node: Parser.SyntaxNode): boolean {
 
 /**
  * Get the symbol kind for a Tree-sitter node
- *
- * @param node - Tree-sitter syntax node
- * @returns Symbol kind or null if not a symbol
  */
 export function getSymbolKind(node: Parser.SyntaxNode): SymbolKind | null {
   return SYMBOL_NODE_TYPES[node.type] || null;
@@ -72,9 +85,6 @@ export function getSymbolKind(node: Parser.SyntaxNode): SymbolKind | null {
 
 /**
  * Check if a node represents a constant (vs a variable)
- *
- * @param node - Tree-sitter syntax node
- * @returns True if node is a constant declaration
  */
 export function isConstant(node: Parser.SyntaxNode): boolean {
   // Check parent for const keyword in JavaScript/TypeScript
@@ -93,10 +103,7 @@ export function isConstant(node: Parser.SyntaxNode): boolean {
 }
 
 /**
- * Extract symbol name from a Tree-sitter node (T013)
- *
- * @param node - Tree-sitter syntax node
- * @returns Symbol name or fallback
+ * Extract symbol name from a Tree-sitter node
  */
 export function extractSymbolName(node: Parser.SyntaxNode): string {
   // Use field name if available (more reliable)
@@ -127,12 +134,9 @@ export function extractSymbolName(node: Parser.SyntaxNode): string {
 }
 
 /**
- * Extract location span from a Tree-sitter node (T014)
- *
- * @param node - Tree-sitter syntax node
- * @returns Span with line, column, and byte offsets
+ * Extract location span from a Tree-sitter node
  */
-export function extractSpan(node: Parser.SyntaxNode): import('../../models/ParseResult.js').Span {
+export function extractSpan(node: Parser.SyntaxNode): Span {
   return {
     startLine: node.startPosition.row + 1, // 1-indexed
     startColumn: node.startPosition.column, // 0-indexed
@@ -144,95 +148,127 @@ export function extractSpan(node: Parser.SyntaxNode): import('../../models/Parse
 }
 
 /**
- * Extract parent scope chain from a Tree-sitter node (T015)
- *
- * Walks up the tree to find all enclosing symbols
- * Returns array ordered from immediate parent to root
- *
- * @param node - Tree-sitter syntax node
- * @returns Array of parent symbol names
+ * Find parent class name by walking up the tree
  */
-export function extractParents(node: Parser.SyntaxNode): string[] {
-  const parents: string[] = [];
+function getParentClassName(node: Parser.SyntaxNode): string | null {
   let current = node.parent;
 
   while (current) {
-    // Check if this parent node is a symbol
-    if (isSymbolNode(current)) {
-      const parentName = extractSymbolName(current);
-      if (parentName && parentName !== '<anonymous>') {
-        parents.push(parentName);
+    if (current.type === 'class_declaration' || current.type === 'class_definition') {
+      const nameNode = current.childForFieldName('name');
+      if (nameNode) {
+        return nameNode.text;
       }
     }
-
     current = current.parent;
   }
 
-  // Return in order from immediate parent to root
-  return parents;
+  return null;
 }
 
 /**
- * Extract symbol signature (T016)
- *
- * Extracts signatures for all symbol types, not just functions/methods.
- * This provides content for embedding generation.
- *
- * @param node - Tree-sitter syntax node
- * @param source - Source code
- * @returns Symbol signature string or null
+ * Check if node is inside a class
  */
-export function extractSignature(node: Parser.SyntaxNode, source: string): string | null {
-  const kind = getSymbolKind(node);
-  if (!kind) return null;
-
-  const name = extractSymbolName(node);
-
-  // Handle different symbol types
-  switch (kind) {
-    case 'function':
-    case 'method':
-      return extractFunctionSignature(node, source, name);
-
-    case 'class':
-      return extractClassSignature(node, source, name);
-
-    case 'interface':
-      return extractInterfaceSignature(node, source, name);
-
-    case 'type':
-      return extractTypeSignature(node, source, name);
-
-    case 'variable':
-    case 'constant':
-      return extractVariableSignature(node, source, name);
-
-    case 'property':
-      return extractPropertySignature(node, source, name);
-
-    case 'enum':
-      return extractEnumSignature(node, source, name);
-
-    default:
-      // For other types, extract the first line of the node
-      const text = source.substring(node.startIndex, node.endIndex);
-      const lines = text.split('\n');
-      const firstLine = lines[0] || text;
-      return firstLine.length > 200 ? firstLine.substring(0, 200) + '...' : firstLine;
+function isInsideClass(node: Parser.SyntaxNode): boolean {
+  let current = node.parent;
+  while (current) {
+    if (current.type === 'class_declaration' || current.type === 'class_definition') {
+      return true;
+    }
+    current = current.parent;
   }
+  return false;
+}
+
+/**
+ * Check if node is exported
+ */
+function isExported(node: Parser.SyntaxNode): boolean {
+  let current: Parser.SyntaxNode | null = node;
+  while (current) {
+    if (current.type === 'export_statement') {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+/**
+ * Extract visibility modifier
+ */
+function extractVisibility(node: Parser.SyntaxNode): 'public' | 'private' | 'protected' | undefined {
+  for (const child of node.children) {
+    if (child.type === 'accessibility_modifier') {
+      const modifier = child.text;
+      if (modifier === 'public' || modifier === 'private' || modifier === 'protected') {
+        return modifier;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Check if function/method is async
+ */
+function isAsync(node: Parser.SyntaxNode): boolean {
+  for (const child of node.children) {
+    if (child.text === 'async') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if method is static
+ */
+function isStatic(node: Parser.SyntaxNode): boolean {
+  for (const child of node.children) {
+    if (child.text === 'static') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if class/method is abstract
+ */
+function isAbstract(node: Parser.SyntaxNode): boolean {
+  for (const child of node.children) {
+    if (child.text === 'abstract') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Extract decorators
+ */
+function extractDecorators(node: Parser.SyntaxNode): string[] {
+  const decorators: string[] = [];
+  for (const child of node.children) {
+    if (child.type === 'decorator') {
+      decorators.push(child.text);
+    }
+  }
+  return decorators;
 }
 
 /**
  * Extract function/method signature
  */
-function extractFunctionSignature(node: Parser.SyntaxNode, source: string, name: string): string | null {
+function extractFunctionSignature(node: Parser.SyntaxNode, source: string, name: string): string {
   const signatureNode = node.children.find(child =>
     child.type === 'formal_parameters' ||
     child.type === 'parameters' // Python
   );
 
   if (!signatureNode) {
-    return null;
+    return `${name}()`;
   }
 
   const params = source.substring(signatureNode.startIndex, signatureNode.endIndex);
@@ -247,46 +283,30 @@ function extractFunctionSignature(node: Parser.SyntaxNode, source: string, name:
     returnType = source.substring(returnTypeNode.startIndex, returnTypeNode.endIndex);
   }
 
-  return `function ${name}${params}${returnType}`;
+  return `${name}${params}${returnType}`;
 }
 
 /**
- * Extract class signature
+ * Extract class signature (unused but kept for future use)
  */
-function extractClassSignature(node: Parser.SyntaxNode, source: string, name: string): string | null {
-  // Find extends/implements clauses
-  const heritage: string[] = [];
+// function extractClassSignature(node: Parser.SyntaxNode, source: string, name: string): string {
+//   // Find extends/implements clauses
+//   const heritage: string[] = [];
 
-  for (const child of node.children) {
-    if (child.type === 'class_heritage' || child.type === 'extends_clause' || child.type === 'implements_clause') {
-      heritage.push(source.substring(child.startIndex, child.endIndex));
-    }
-  }
+//   for (const child of node.children) {
+//     if (child.type === 'class_heritage' || child.type === 'extends_clause' || child.type === 'implements_clause') {
+//       heritage.push(source.substring(child.startIndex, child.endIndex));
+//     }
+//   }
 
-  const heritageStr = heritage.length > 0 ? ' ' + heritage.join(' ') : '';
-  return `class ${name}${heritageStr}`;
-}
+//   const heritageStr = heritage.length > 0 ? ' ' + heritage.join(' ') : '';
+//   return `class ${name}${heritageStr}`;
+// }
 
 /**
- * Extract interface signature
+ * Extract type signature
  */
-function extractInterfaceSignature(node: Parser.SyntaxNode, source: string, name: string): string | null {
-  // Find extends clause
-  const extendsNode = node.children.find(child =>
-    child.type === 'extends_clause' || child.type === 'extends_type_clause'
-  );
-
-  const extendsStr = extendsNode
-    ? ' ' + source.substring(extendsNode.startIndex, extendsNode.endIndex)
-    : '';
-
-  return `interface ${name}${extendsStr}`;
-}
-
-/**
- * Extract type alias signature
- */
-function extractTypeSignature(node: Parser.SyntaxNode, source: string, name: string): string | null {
+function extractTypeSignature(node: Parser.SyntaxNode, source: string, name: string): string {
   // Find the type definition
   const typeNode = node.children.find(child =>
     child.type === 'type' || child.type === 'type_annotation'
@@ -303,150 +323,114 @@ function extractTypeSignature(node: Parser.SyntaxNode, source: string, name: str
 }
 
 /**
- * Extract variable/constant signature
+ * Extract variable/constant signature (unused but kept for future use)
  */
-function extractVariableSignature(node: Parser.SyntaxNode, source: string, _name: string): string | null {
-  // Get the full declarator node text
-  const declaratorText = source.substring(node.startIndex, node.endIndex);
+// function extractVariableSignature(node: Parser.SyntaxNode, source: string): string {
+//   // Get the full declarator node text
+//   const declaratorText = source.substring(node.startIndex, node.endIndex);
 
-  // Find parent to determine if const/let/var
-  let declarationKeyword = 'var';
-  let parent = node.parent;
-  while (parent) {
-    if (parent.type === 'lexical_declaration' || parent.type === 'variable_declaration') {
-      const firstChild = parent.child(0);
-      if (firstChild && (firstChild.type === 'const' || firstChild.type === 'let' || firstChild.type === 'var')) {
-        declarationKeyword = firstChild.text;
-      }
-      break;
-    }
-    parent = parent.parent;
-  }
+//   // Find parent to determine if const/let/var
+//   let declarationKeyword = 'var';
+//   let parent = node.parent;
+//   while (parent) {
+//     if (parent.type === 'lexical_declaration' || parent.type === 'variable_declaration') {
+//       const firstChild = parent.child(0);
+//       if (firstChild && (firstChild.type === 'const' || firstChild.type === 'let' || firstChild.type === 'var')) {
+//         declarationKeyword = firstChild.text;
+//       }
+//       break;
+//     }
+//     parent = parent.parent;
+//   }
 
-  // Limit length for long initializers
-  const truncated = declaratorText.length > 200
-    ? declaratorText.substring(0, 200) + '...'
-    : declaratorText;
+//   // Limit length for long initializers
+//   const truncated = declaratorText.length > 200
+//     ? declaratorText.substring(0, 200) + '...'
+//     : declaratorText;
 
-  return `${declarationKeyword} ${truncated}`;
+//   return `${declarationKeyword} ${truncated}`;
+// }
+
+/**
+ * Extract documentation from preceding comments
+ */
+function extractDocumentation(_node: Parser.SyntaxNode, _source: string): string | null {
+  // TODO: Look for JSDoc/docstring comments immediately before the node
+  // For now, return null - will be populated by CommentExtractor
+  return null;
 }
 
 /**
- * Extract property signature
+ * Extract inherited classes
  */
-function extractPropertySignature(node: Parser.SyntaxNode, source: string, _name: string): string | null {
-  // Get the property definition
-  const propText = source.substring(node.startIndex, node.endIndex);
-  const lines = propText.split('\n');
-  const firstLine = lines[0] || propText;
+function extractInherits(node: Parser.SyntaxNode, _source: string): string[] | undefined {
+  const inherits: string[] = [];
 
-  return firstLine.length > 200 ? firstLine.substring(0, 200) + '...' : firstLine;
-}
-
-/**
- * Extract enum signature
- */
-function extractEnumSignature(_node: Parser.SyntaxNode, _source: string, name: string): string | null {
-  return `enum ${name}`;
-}
-
-/**
- * Extract symbol metadata (T017)
- *
- * @param node - Tree-sitter syntax node
- * @param source - Source code
- * @returns Symbol metadata
- */
-export function extractMetadata(
-  node: Parser.SyntaxNode,
-  source: string
-): import('../../models/ParseResult.js').SymbolMetadata {
-  const metadata: import('../../models/ParseResult.js').SymbolMetadata = {
-    exported: false,
-  };
-
-  // Check for export modifier
-  let current: Parser.SyntaxNode | null = node;
-  while (current) {
-    if (current.type === 'export_statement') {
-      metadata.exported = true;
-      break;
-    }
-    current = current.parent;
-  }
-
-  // Check for visibility modifiers
   for (const child of node.children) {
-    if (child.type === 'accessibility_modifier') {
-      const modifier = child.text;
-      if (modifier === 'public' || modifier === 'private' || modifier === 'protected') {
-        metadata.visibility = modifier;
+    if (child.type === 'class_heritage' || child.type === 'extends_clause') {
+      // Extract class names from extends clause
+      for (const grandchild of child.children) {
+        if (grandchild.type === 'identifier' || grandchild.type === 'type_identifier') {
+          inherits.push(grandchild.text);
+        }
       }
     }
   }
 
-  // Check for async modifier
-  for (const child of node.children) {
-    if (child.text === 'async') {
-      metadata.async = true;
-      break;
-    }
-  }
-
-  // Check for static modifier
-  for (const child of node.children) {
-    if (child.text === 'static') {
-      metadata.static = true;
-      break;
-    }
-  }
-
-  // Check for abstract modifier
-  for (const child of node.children) {
-    if (child.text === 'abstract') {
-      metadata.abstract = true;
-      break;
-    }
-  }
-
-  // Extract type annotation (if present)
-  const typeAnnotation = node.children.find(child =>
-    child.type === 'type_annotation' || child.type === 'type'
-  );
-  if (typeAnnotation) {
-    metadata.typeAnnotation = source.substring(
-      typeAnnotation.startIndex,
-      typeAnnotation.endIndex
-    );
-  }
-
-  // Extract decorators (TypeScript/Python)
-  const decorators: string[] = [];
-  for (const child of node.children) {
-    if (child.type === 'decorator') {
-      decorators.push(child.text);
-    }
-  }
-  if (decorators.length > 0) {
-    metadata.decorators = decorators;
-  }
-
-  return metadata;
+  return inherits.length > 0 ? inherits : undefined;
 }
 
 /**
- * Extract all symbols from parsed tree (T018)
- *
- * Walks the Tree-sitter tree recursively and extracts all symbols
- * with their names, kinds, spans, parents, signatures, and metadata.
- *
- * @param tree - Tree-sitter parse tree
- * @param source - Source code content
- * @returns Array of extracted symbols
+ * Extract implemented interfaces
  */
-export function extractSymbols(tree: Parser.Tree, source: string): Symbol[] {
-  const symbols: Symbol[] = [];
+function extractImplements(node: Parser.SyntaxNode, _source: string): string[] | undefined {
+  const implements_: string[] = [];
 
+  for (const child of node.children) {
+    if (child.type === 'implements_clause') {
+      // Extract interface names
+      for (const grandchild of child.children) {
+        if (grandchild.type === 'identifier' || grandchild.type === 'type_identifier') {
+          implements_.push(grandchild.text);
+        }
+      }
+    }
+  }
+
+  return implements_.length > 0 ? implements_ : undefined;
+}
+
+/**
+ * Extract extended interfaces
+ */
+function extractExtends(node: Parser.SyntaxNode, _source: string): string[] | undefined {
+  const extends_: string[] = [];
+
+  for (const child of node.children) {
+    if (child.type === 'extends_clause' || child.type === 'extends_type_clause') {
+      // Extract interface names
+      for (const grandchild of child.children) {
+        if (grandchild.type === 'identifier' || grandchild.type === 'type_identifier') {
+          extends_.push(grandchild.text);
+        }
+      }
+    }
+  }
+
+  return extends_.length > 0 ? extends_ : undefined;
+}
+
+/**
+ * Extract all symbols from parsed tree into ASTDocBuilder
+ *
+ * Walks the Tree-sitter tree recursively and extracts all symbols,
+ * populating the builder with complete metadata.
+ */
+export function extractSymbols(
+  tree: Parser.Tree,
+  source: string,
+  builder: ASTDocBuilder
+): void {
   /**
    * Recursive tree walker that extracts symbols
    */
@@ -464,45 +448,164 @@ export function extractSymbols(tree: Parser.Tree, source: string): Symbol[] {
         return;
       }
 
-      // Override kind if it's a constant
-      let finalKind = kind;
-      if (kind === 'variable' && isConstant(node)) {
-        finalKind = 'constant';
-      }
-
-      // For Python: function_definition inside a class should be 'method'
-      if (node.type === 'function_definition') {
-        // Check if parent is a class
-        let parent = node.parent;
-        while (parent) {
-          if (parent.type === 'class_definition') {
-            finalKind = 'method';
-            break;
-          }
-          parent = parent.parent;
-        }
-      }
-
-      // Extract all symbol properties
+      // Extract common data
       const name = extractSymbolName(node);
       const span = extractSpan(node);
-      const parents = extractParents(node);
-      const signature = extractSignature(node, source);
-      const metadata = extractMetadata(node, source);
+      const doc = extractDocumentation(node, source);
+      const exported = isExported(node);
 
-      // Create symbol object
-      const symbol: Symbol = {
-        name,
-        kind: finalKind,
-        span,
-        parents,
-        signature,
-        documentation: null, // Will be populated in Phase 5 (US3)
-        hash: '', // Will be populated in Phase 7 (US5)
-        metadata,
-      };
+      // Handle each symbol type
+      switch (kind) {
+        case 'function': {
+          // Check if it's actually a method (inside a class)
+          if (isInsideClass(node)) {
+            // Will be handled as a method
+            break;
+          }
 
-      symbols.push(symbol);
+          const signature = extractFunctionSignature(node, source, name);
+          const decorators = extractDecorators(node);
+          const visibility = extractVisibility(node);
+          const asyncFunc = isAsync(node);
+
+          builder.addFunction(name, {
+            signature,
+            span,
+            doc,
+            decorators: decorators.length > 0 ? decorators : undefined,
+            visibility,
+            async: asyncFunc,
+            exported
+          });
+          break;
+        }
+
+        case 'class': {
+          const inherits = extractInherits(node, source);
+          const implements_ = extractImplements(node, source);
+          const abstract = isAbstract(node);
+
+          builder.addClass(name, {
+            span,
+            inherits,
+            implements: implements_,
+            doc,
+            abstract,
+            exported
+          });
+          break;
+        }
+
+        case 'method': {
+          const className = getParentClassName(node);
+          if (!className) {
+            // Method without parent class - skip
+            break;
+          }
+
+          const signature = extractFunctionSignature(node, source, name);
+          const decorators = extractDecorators(node);
+          const visibility = extractVisibility(node);
+          const staticMethod = isStatic(node);
+          const abstractMethod = isAbstract(node);
+          const asyncMethod = isAsync(node);
+
+          try {
+            builder.addMethod(className, name, {
+              signature,
+              span,
+              doc,
+              decorators: decorators.length > 0 ? decorators : undefined,
+              static: staticMethod,
+              abstract: abstractMethod,
+              async: asyncMethod,
+              visibility
+            });
+          } catch (error) {
+            // Class might not exist yet if we encounter method before class
+            // This shouldn't happen with proper traversal, but handle gracefully
+            console.warn(`Failed to add method ${name} to class ${className}:`, error);
+          }
+          break;
+        }
+
+        case 'interface': {
+          const extends_ = extractExtends(node, source);
+
+          builder.addInterface(name, {
+            span,
+            doc,
+            extends: extends_,
+            exported
+          });
+          break;
+        }
+
+        case 'type': {
+          const typeStr = extractTypeSignature(node, source, name);
+
+          builder.addTypeAlias(name, {
+            type: typeStr,
+            span,
+            doc,
+            exported
+          });
+          break;
+        }
+
+        case 'enum': {
+          // Extract enum values
+          const values: string[] = [];
+          for (const child of node.children) {
+            if (child.type === 'enum_body') {
+              for (const member of child.children) {
+                if (member.type === 'property_identifier' || member.type === 'identifier') {
+                  values.push(member.text);
+                }
+              }
+            }
+          }
+
+          builder.addEnum(name, {
+            values,
+            span,
+            doc,
+            exported
+          });
+          break;
+        }
+
+        case 'variable':
+        case 'constant': {
+          // Determine if it's a constant
+          const isConst = isConstant(node);
+
+          // Extract value
+          const valueNode = node.childForFieldName('value');
+          const value = valueNode ? source.substring(valueNode.startIndex, valueNode.endIndex) : '';
+
+          if (isConst || kind === 'constant') {
+            builder.addConstant(name, {
+              type: undefined, // TODO: Extract type annotation
+              value,
+              span,
+              exported
+            });
+          }
+          // Skip regular variables for now - focus on constants
+          break;
+        }
+
+        case 'property': {
+          // Properties are handled separately when we process their parent class/interface
+          // We could extract them here if needed
+          break;
+        }
+
+        default:
+          // Skip other kinds (module, namespace, import, export - handled separately)
+          break;
+      }
     }
 
     // Recursively walk children
@@ -513,6 +616,4 @@ export function extractSymbols(tree: Parser.Tree, source: string): Symbol[] {
 
   // Start walking from root node
   walkNode(tree.rootNode);
-
-  return symbols;
 }

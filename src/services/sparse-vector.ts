@@ -5,7 +5,7 @@
  * Uses FNV-1a hashing to map n-grams to a fixed feature space.
  */
 
-import type { ParseResult } from '../models/ParseResult.js';
+import type { ASTDoc } from '../models/ASTDoc.js';
 
 /**
  * Sparse vector represented as a map of feature indices to values
@@ -45,62 +45,121 @@ const FNV_OFFSET_BASIS = 2166136261;
 const FNV_PRIME = 16777619;
 
 /**
- * Convert ParseResult to searchable text representation
+ * Convert ASTDoc to searchable text representation
  * Extracts symbols, signatures, documentation, and code structure
  */
-export function astToText(parseResult: ParseResult): string {
+export function astToText(astDoc: ASTDoc): string {
   const parts: string[] = [];
 
   // Add file path (for context)
-  parts.push(parseResult.path);
+  parts.push(astDoc.file);
 
-  // Add symbols with their kinds
-  for (const symbol of parseResult.symbols) {
-    parts.push(symbol.name);
-    parts.push(symbol.kind);
-
-    if (symbol.signature) {
-      parts.push(symbol.signature);
-    }
-
-    if (symbol.documentation) {
-      parts.push(symbol.documentation);
-    }
-
-    // Add parent context (scoping)
-    if (symbol.parents.length > 0) {
-      parts.push(symbol.parents.join('.'));
+  // Add functions
+  if (astDoc.functions) {
+    for (const [name, func] of Object.entries(astDoc.functions)) {
+      parts.push(name);
+      parts.push('function');
+      parts.push(func.signature);
+      if (func.doc) parts.push(func.doc);
     }
   }
 
-  // Add import/export module names
-  for (const imp of parseResult.imports) {
-    parts.push(imp.source);
-    for (const spec of imp.specifiers) {
-      parts.push(spec.imported);
-      parts.push(spec.local);
+  // Add classes
+  if (astDoc.classes) {
+    for (const [name, cls] of Object.entries(astDoc.classes)) {
+      parts.push(name);
+      parts.push('class');
+      if (cls.doc) parts.push(cls.doc);
+
+      // Add methods
+      if (cls.methods) {
+        for (const [methodName, method] of Object.entries(cls.methods)) {
+          parts.push(methodName);
+          parts.push('method');
+          parts.push(method.signature);
+          if (method.doc) parts.push(method.doc);
+        }
+      }
     }
   }
 
-  for (const exp of parseResult.exports) {
-    for (const spec of exp.specifiers) {
-      parts.push(spec.local);
-      parts.push(spec.exported);
+  // Add interfaces
+  if (astDoc.interfaces) {
+    for (const [name, iface] of Object.entries(astDoc.interfaces)) {
+      parts.push(name);
+      parts.push('interface');
+      if (iface.doc) parts.push(iface.doc);
     }
   }
 
-  // Add function calls
-  for (const call of parseResult.calls) {
-    parts.push(call.callee);
-    if (call.receiver) {
-      parts.push(call.receiver);
+  // Add type aliases
+  if (astDoc.type_aliases) {
+    for (const [name, typeAlias] of Object.entries(astDoc.type_aliases)) {
+      parts.push(name);
+      parts.push('type');
+      parts.push(typeAlias.type);
+      if (typeAlias.doc) parts.push(typeAlias.doc);
     }
   }
 
-  // Add comment text
-  for (const comment of parseResult.comments) {
-    if (comment.kind === 'jsdoc' || comment.kind === 'docstring') {
-      parts.push(comment.text);
+  // Add enums
+  if (astDoc.enums) {
+    for (const [name, enumType] of Object.entries(astDoc.enums)) {
+      parts.push(name);
+      parts.push('enum');
+      if (enumType.values) {
+        parts.push(...enumType.values);
+      }
+      if (enumType.doc) parts.push(enumType.doc);
+    }
+  }
+
+  // Add constants
+  if (astDoc.constants) {
+    for (const [name, constant] of Object.entries(astDoc.constants)) {
+      parts.push(name);
+      parts.push('constant');
+      if (constant.value) parts.push(constant.value);
+    }
+  }
+
+  // Add components (React)
+  if (astDoc.components) {
+    for (const [name, component] of Object.entries(astDoc.components)) {
+      parts.push(name);
+      parts.push('component');
+      if (component.doc) parts.push(component.doc);
+    }
+  }
+
+  // Add imports
+  if (astDoc.imports) {
+    for (const imp of astDoc.imports) {
+      parts.push(imp.source);
+      for (const spec of imp.specifiers) {
+        parts.push(spec.imported);
+        parts.push(spec.local);
+      }
+    }
+  }
+
+  // Add exports
+  if (astDoc.exports) {
+    for (const exp of astDoc.exports) {
+      if (exp.source) parts.push(exp.source);
+      for (const spec of exp.specifiers) {
+        parts.push(spec.local);
+        parts.push(spec.exported);
+      }
+    }
+  }
+
+  // Add comments (only doc comments)
+  if (astDoc.comments) {
+    for (const comment of astDoc.comments) {
+      if (comment.kind === 'jsdoc' || comment.kind === 'docstring') {
+        parts.push(comment.text);
+      }
     }
   }
 

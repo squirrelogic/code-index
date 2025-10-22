@@ -6,7 +6,7 @@
  */
 
 import Parser from 'tree-sitter';
-import type { SyntaxError, ErrorSeverity } from '../../models/ParseResult.js';
+import type { SyntaxError, ErrorSeverity } from '../../models/ASTDoc.js';
 
 /**
  * Represents an edit to source code for incremental parsing

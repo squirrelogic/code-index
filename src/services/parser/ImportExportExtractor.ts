@@ -1,595 +1,303 @@
 /**
- * Import/Export Statement Extraction
+ * Import/Export Extraction
  *
- * Extracts import and export statements to track module dependencies
- * and API surfaces.
+ * Extracts import and export statements from Tree-sitter parse tree
+ * and adds them to ASTDocBuilder with full details.
  */
 
-import type TreeSitter from 'tree-sitter';
-import type {
-  ImportStatement,
-  ImportKind,
-  ImportSpecifier,
-  ExportStatement,
-  ExportKind,
-  ExportSpecifier,
-} from '../../models/ParseResult.js';
+import type Parser from 'tree-sitter';
+import type { ASTDocBuilder } from './ASTDocBuilder.js';
+import type { ImportStatement, ExportStatement, ImportSpecifier, ExportSpecifier } from '../../models/ASTDoc.js';
 import { extractSpan } from './SymbolExtractor.js';
 
-// ============================================================================
-// Import Node Identification (T024)
-// ============================================================================
-
 /**
- * Check if a Tree-sitter node represents an import statement
- *
- * @param node - Tree-sitter syntax node
- * @returns True if node is an import
+ * Extract import statements from tree
  */
-export function isImportNode(node: TreeSitter.SyntaxNode): boolean {
-  const nodeType = node.type;
-
-  // JavaScript/TypeScript import nodes
-  if (
-    nodeType === 'import_statement' ||
-    nodeType === 'import' ||
-    nodeType === 'import_clause'
-  ) {
-    return true;
-  }
-
-  // CommonJS require: const foo = require('bar')
-  if (nodeType === 'variable_declarator') {
-    const init = node.childForFieldName('value');
-    if (init?.type === 'call_expression') {
-      const callee = init.childForFieldName('function');
-      if (callee?.text === 'require') {
-        return true;
+export function extractImports(
+  tree: Parser.Tree,
+  source: string,
+  builder: ASTDocBuilder
+): void {
+  function walkNode(node: Parser.SyntaxNode): void {
+    // Check for import statements
+    if (node.type === 'import_statement') {
+      const importStmt = parseImportStatement(node, source);
+      if (importStmt) {
+        builder.addImport(importStmt);
       }
     }
+
+    // Recursively walk children
+    for (const child of node.children) {
+      walkNode(child);
+    }
   }
 
-  // Python import nodes
-  if (nodeType === 'import_statement' || nodeType === 'import_from_statement') {
-    return true;
-  }
-
-  return false;
+  walkNode(tree.rootNode);
 }
 
 /**
- * Determine the kind of import from a Tree-sitter node
- *
- * @param node - Tree-sitter syntax node (must be an import node)
- * @returns Import kind
+ * Extract export statements from tree
  */
-export function getImportKind(node: TreeSitter.SyntaxNode): ImportKind {
-  const nodeType = node.type;
-  const nodeText = node.text;
+export function extractExports(
+  tree: Parser.Tree,
+  source: string,
+  builder: ASTDocBuilder
+): void {
+  function walkNode(node: Parser.SyntaxNode): void {
+    // Check for export statements
+    if (node.type === 'export_statement') {
+      const exportStmt = parseExportStatement(node, source);
+      if (exportStmt) {
+        builder.addExport(exportStmt);
+      }
+    }
 
-  // Dynamic import: import('module')
-  if (nodeType === 'call_expression') {
-    const callee = node.childForFieldName('function');
-    if (callee?.text === 'import') {
-      return 'dynamic';
+    // Recursively walk children
+    for (const child of node.children) {
+      walkNode(child);
     }
   }
 
-  // CommonJS require
-  if (nodeType === 'variable_declarator') {
-    return 'require';
-  }
-
-  // Side-effect import: import 'module'
-  if (nodeType === 'import_statement' && !nodeText.includes('from')) {
-    const hasClause = node.children.some(
-      (child) => child.type === 'import_clause' || child.type === 'namespace_import'
-    );
-    if (!hasClause) {
-      return 'side-effect';
-    }
-  }
-
-  // Namespace import: import * as foo from 'module'
-  if (nodeText.includes('* as ') || node.children.some((c) => c.type === 'namespace_import')) {
-    return 'namespace';
-  }
-
-  // Default import: import foo from 'module'
-  // Check if there's an identifier without braces before 'from'
-  const hasDefaultImport = node.children.some((child) => {
-    if (child.type === 'import_clause') {
-      const firstChild = child.child(0);
-      return firstChild?.type === 'identifier';
-    }
-    return false;
-  });
-
-  if (hasDefaultImport && !nodeText.includes('{')) {
-    return 'default';
-  }
-
-  // Named import: import { foo } from 'module' (default)
-  return 'named';
+  walkNode(tree.rootNode);
 }
 
-// ============================================================================
-// Import Extraction (T025)
-// ============================================================================
-
 /**
- * Extract import statement details from a Tree-sitter node
- *
- * @param node - Tree-sitter syntax node (must be an import node)
- * @param source - Source code text
- * @returns ImportStatement object
+ * Parse an import statement node
  */
-export function extractImport(node: TreeSitter.SyntaxNode, source: string): ImportStatement {
-  const kind = getImportKind(node);
-  const importSource = extractImportSource(node);
-  const specifiers = extractImportSpecifiers(node, source);
+function parseImportStatement(node: Parser.SyntaxNode, _source: string): ImportStatement | null {
   const span = extractSpan(node);
 
-  return {
-    source: importSource,
-    kind,
-    specifiers,
-    span,
-  };
-}
+  // Find the source
+  const sourceNode = node.childForFieldName('source');
+  if (!sourceNode) return null;
 
-/**
- * Extract the source module path from an import node
- *
- * @param node - Tree-sitter import node
- * @returns Module source path
- */
-function extractImportSource(node: TreeSitter.SyntaxNode): string {
-  // Look for string literal child
-  const stringNode = node.children.find((child) => child.type === 'string');
-
-  if (stringNode) {
-    // Remove quotes from string literal
-    return stringNode.text.replace(/['"]/g, '');
+  // Remove quotes from source
+  let sourceText = sourceNode.text;
+  if (sourceText.startsWith("'") || sourceText.startsWith('"')) {
+    sourceText = sourceText.slice(1, -1);
   }
 
-  // For CommonJS require
-  if (node.type === 'variable_declarator') {
-    const init = node.childForFieldName('value');
-    if (init?.type === 'call_expression') {
-      const arg = init.childForFieldName('arguments')?.child(1); // First child is '(', second is arg
-      if (arg && arg.type === 'string') {
-        return arg.text.replace(/['"]/g, '');
-      }
-    }
-  }
-
-  return '';
-}
-
-/**
- * Extract import specifiers (imported names and local bindings)
- *
- * @param node - Tree-sitter import node
- * @param source - Source code text
- * @returns Array of import specifiers
- */
-function extractImportSpecifiers(
-  node: TreeSitter.SyntaxNode,
-  _source: string
-): ImportSpecifier[] {
-  const kind = getImportKind(node);
+  // Determine import kind and extract specifiers
+  let kind: ImportStatement['kind'] = 'named';
   const specifiers: ImportSpecifier[] = [];
 
-  // Side-effect imports have no specifiers
-  if (kind === 'side-effect') {
-    return specifiers;
-  }
-
-  // Namespace import: import * as foo
-  if (kind === 'namespace') {
-    // Look for namespace_import or import_clause containing namespace_import
-    let namespaceNode = node.children.find((c) => c.type === 'namespace_import');
-
-    if (!namespaceNode) {
-      const importClause = node.children.find((c) => c.type === 'import_clause');
-      if (importClause) {
-        namespaceNode = importClause.children.find((c) => c.type === 'namespace_import');
-      }
-    }
-
-    if (namespaceNode) {
-      // Find the identifier (the local binding name after 'as')
-      const localName = namespaceNode.children.find((c) => c.type === 'identifier');
-      if (localName) {
+  // Check for namespace import: import * as foo from 'module'
+  for (const child of node.children) {
+    if (child.type === 'namespace_import') {
+      kind = 'namespace';
+      const nameNode = child.childForFieldName('name') || child.children.find(c => c.type === 'identifier');
+      if (nameNode) {
         specifiers.push({
           imported: '*',
-          local: localName.text,
-          typeOnly: false,
+          local: nameNode.text
         });
       }
+      break;
     }
-    return specifiers;
   }
 
-  // Default import
-  if (kind === 'default') {
-    const importClause = node.children.find((c) => c.type === 'import_clause');
+  // Check for named imports: import { foo, bar } from 'module'
+  if (kind === 'named') {
+    const importClause = node.children.find(c => c.type === 'import_clause');
     if (importClause) {
-      const identifier = importClause.child(0);
-      if (identifier?.type === 'identifier') {
+      // Check for default import
+      const defaultNode = importClause.children.find(c => c.type === 'identifier');
+      if (defaultNode) {
+        kind = 'default';
         specifiers.push({
           imported: 'default',
-          local: identifier.text,
-          typeOnly: false,
+          local: defaultNode.text
         });
       }
-    }
-    return specifiers;
-  }
 
-  // Named imports: import { foo, bar as baz }
-  if (kind === 'named') {
-    const importClause = node.children.find((c) => c.type === 'import_clause');
-    if (importClause) {
-      const namedImports = importClause.children.find((c) => c.type === 'named_imports');
+      // Check for named specifiers
+      const namedImports = importClause.children.find(c => c.type === 'named_imports');
       if (namedImports) {
         for (const child of namedImports.children) {
           if (child.type === 'import_specifier') {
-            const imported = child.childForFieldName('name');
-            const local = child.childForFieldName('alias') || imported;
+            const nameNode = child.childForFieldName('name');
+            const aliasNode = child.childForFieldName('alias');
 
-            if (imported) {
+            if (nameNode) {
               specifiers.push({
-                imported: imported.text,
-                local: local?.text || imported.text,
-                typeOnly: false,
+                imported: nameNode.text,
+                local: aliasNode ? aliasNode.text : nameNode.text
               });
             }
           }
         }
       }
-    }
-    return specifiers;
-  }
-
-  // CommonJS require: const { foo, bar } = require('module')
-  if (kind === 'require') {
-    const pattern = node.childForFieldName('name');
-    if (pattern?.type === 'identifier') {
-      // Simple require: const foo = require('module')
-      specifiers.push({
-        imported: 'default',
-        local: pattern.text,
-        typeOnly: false,
-      });
-    } else if (pattern?.type === 'object_pattern') {
-      // Destructured require: const { foo, bar } = require('module')
-      for (const child of pattern.children) {
-        if (child.type === 'shorthand_property_identifier_pattern') {
-          specifiers.push({
-            imported: child.text,
-            local: child.text,
-            typeOnly: false,
-          });
-        } else if (child.type === 'pair_pattern') {
-          const key = child.childForFieldName('key');
-          const value = child.childForFieldName('value');
-          if (key && value) {
-            specifiers.push({
-              imported: key.text,
-              local: value.text,
-              typeOnly: false,
-            });
-          }
-        }
-      }
+    } else if (!sourceNode.parent || sourceNode.parent.children.length === 2) {
+      // Side-effect import: import 'module'
+      kind = 'side-effect';
     }
   }
-
-  return specifiers;
-}
-
-/**
- * Extract import statements from parsed tree
- *
- * @param tree - Tree-sitter parse tree
- * @param source - Source code text
- * @returns Array of import statements
- */
-export function extractImports(tree: TreeSitter.Tree, source: string): ImportStatement[] {
-  const imports: ImportStatement[] = [];
-  const cursor = tree.walk();
-
-  function visit() {
-    const node = cursor.currentNode;
-
-    if (isImportNode(node)) {
-      try {
-        imports.push(extractImport(node, source));
-        // Don't visit children of import nodes (avoid duplicate extraction)
-        return;
-      } catch (error) {
-        // Skip malformed imports
-        console.warn(`Failed to extract import at ${node.startPosition.row}: ${error}`);
-      }
-    }
-
-    // Visit children
-    if (cursor.gotoFirstChild()) {
-      do {
-        visit();
-      } while (cursor.gotoNextSibling());
-      cursor.gotoParent();
-    }
-  }
-
-  visit();
-  return imports;
-}
-
-// ============================================================================
-// Export Node Identification (T026)
-// ============================================================================
-
-/**
- * Check if a Tree-sitter node represents an export statement
- *
- * @param node - Tree-sitter syntax node
- * @returns True if node is an export
- */
-export function isExportNode(node: TreeSitter.SyntaxNode): boolean {
-  const nodeType = node.type;
-
-  // Export statements
-  if (
-    nodeType === 'export_statement' ||
-    nodeType === 'export' ||
-    nodeType === 'export_clause'
-  ) {
-    return true;
-  }
-
-  // Check for export modifier on declarations
-  if (
-    nodeType === 'lexical_declaration' ||
-    nodeType === 'function_declaration' ||
-    nodeType === 'class_declaration' ||
-    nodeType === 'interface_declaration' ||
-    nodeType === 'type_alias_declaration'
-  ) {
-    // Check if parent or node has 'export' keyword
-    return node.text.startsWith('export ');
-  }
-
-  return false;
-}
-
-/**
- * Determine the kind of export from a Tree-sitter node
- *
- * @param node - Tree-sitter syntax node (must be an export node)
- * @returns Export kind
- */
-export function getExportKind(node: TreeSitter.SyntaxNode): ExportKind {
-  const nodeText = node.text;
-
-  // Default export: export default ...
-  if (nodeText.includes('export default')) {
-    return 'default';
-  }
-
-  // Namespace export: export * from 'module'
-  if (nodeText.match(/export\s+\*\s+from/)) {
-    return 'namespace';
-  }
-
-  // Export declaration: export const/function/class/interface ...
-  if (
-    nodeText.match(/export\s+(const|let|var|function|class|interface|type|enum)/)
-  ) {
-    return 'declaration';
-  }
-
-  // Named export: export { foo, bar }
-  return 'named';
-}
-
-// ============================================================================
-// Export Extraction (T027)
-// ============================================================================
-
-/**
- * Extract export statement details from a Tree-sitter node
- *
- * @param node - Tree-sitter syntax node (must be an export node)
- * @param source - Source code text
- * @returns ExportStatement object
- */
-export function extractExport(node: TreeSitter.SyntaxNode, source: string): ExportStatement {
-  const kind = getExportKind(node);
-  const specifiers = extractExportSpecifiers(node, source);
-  const exportSource = extractExportSource(node);
-  const span = extractSpan(node);
 
   return {
+    source: sourceText,
     kind,
     specifiers,
-    source: exportSource,
-    span,
+    span
   };
 }
 
 /**
- * Extract the source module path from an export node (for re-exports)
- *
- * @param node - Tree-sitter export node
- * @returns Module source path, or undefined if not a re-export
+ * Parse an export statement node
  */
-function extractExportSource(node: TreeSitter.SyntaxNode): string | undefined {
-  // Look for 'from' keyword followed by string literal
-  const nodeText = node.text;
-  const fromMatch = nodeText.match(/from\s+['"]([^'"]+)['"]/);
+function parseExportStatement(node: Parser.SyntaxNode, _source: string): ExportStatement | null {
+  const span = extractSpan(node);
 
-  if (fromMatch) {
-    return fromMatch[1];
-  }
+  // Check for re-export: export { foo } from 'module'
+  const sourceNode = node.childForFieldName('source');
+  const sourceText = sourceNode ? sourceNode.text.slice(1, -1) : undefined;
 
-  return undefined;
-}
-
-/**
- * Extract export specifiers (local name, exported name)
- *
- * @param node - Tree-sitter export node
- * @param source - Source code text
- * @returns Array of export specifiers
- */
-function extractExportSpecifiers(
-  node: TreeSitter.SyntaxNode,
-  _source: string
-): ExportSpecifier[] {
-  const kind = getExportKind(node);
+  let kind: ExportStatement['kind'] = 'named';
   const specifiers: ExportSpecifier[] = [];
 
-  // Default export
-  if (kind === 'default') {
-    // Try to find the exported identifier
-    const declaration = node.children.find(
-      (c) =>
-        c.type === 'function_declaration' ||
-        c.type === 'class_declaration' ||
-        c.type === 'identifier' ||
-        c.type === 'lexical_declaration'
+  // Check for default export: export default foo
+  const defaultNode = node.children.find(c => c.text === 'default');
+  if (defaultNode) {
+    kind = 'default';
+    // Get what's being exported
+    const valueNode = node.children.find(c =>
+      c.type === 'identifier' ||
+      c.type === 'function_declaration' ||
+      c.type === 'class_declaration'
     );
-
-    if (declaration) {
-      let localName = 'default';
-      if (declaration.type === 'identifier') {
-        localName = declaration.text;
-      } else {
-        const nameNode = declaration.childForFieldName('name');
-        if (nameNode) {
-          localName = nameNode.text;
-        }
-      }
-
+    if (valueNode) {
+      const name = valueNode.type === 'identifier' ? valueNode.text : extractName(valueNode);
       specifiers.push({
-        local: localName,
-        exported: 'default',
-        typeOnly: false,
+        local: name,
+        exported: 'default'
       });
     }
-    return specifiers;
+    return {
+      kind,
+      specifiers,
+      source: sourceText,
+      span
+    };
   }
 
-  // Namespace export: export * from 'module'
-  if (kind === 'namespace') {
+  // Check for namespace export: export * from 'module'
+  const starNode = node.children.find(c => c.text === '*');
+  if (starNode && sourceText) {
+    kind = 'namespace';
     specifiers.push({
       local: '*',
-      exported: '*',
-      typeOnly: false,
+      exported: '*'
     });
-    return specifiers;
+    return {
+      kind,
+      specifiers,
+      source: sourceText,
+      span
+    };
   }
 
-  // Export declaration: export const foo = ...
-  if (kind === 'declaration') {
-    const declaration = node.children.find(
-      (c) =>
-        c.type === 'lexical_declaration' ||
-        c.type === 'function_declaration' ||
-        c.type === 'class_declaration' ||
-        c.type === 'interface_declaration' ||
-        c.type === 'type_alias_declaration' ||
-        c.type === 'enum_declaration'
-    );
+  // Check for declaration export: export const foo = ...
+  const declaration = node.children.find(c =>
+    c.type === 'lexical_declaration' ||
+    c.type === 'function_declaration' ||
+    c.type === 'class_declaration' ||
+    c.type === 'variable_declaration'
+  );
 
-    if (declaration) {
-      const nameNode = declaration.childForFieldName('name');
-      if (nameNode) {
-        specifiers.push({
-          local: nameNode.text,
-          exported: nameNode.text,
-          typeOnly: false,
-        });
-      } else if (declaration.type === 'lexical_declaration') {
-        // Handle const/let/var declarations which may have multiple declarators
-        for (const child of declaration.children) {
-          if (child.type === 'variable_declarator') {
-            const name = child.childForFieldName('name');
-            if (name) {
-              specifiers.push({
-                local: name.text,
-                exported: name.text,
-                typeOnly: false,
-              });
-            }
-          }
-        }
-      }
+  if (declaration) {
+    kind = 'declaration';
+    // Extract names from declaration
+    const names = extractNamesFromDeclaration(declaration);
+    for (const name of names) {
+      specifiers.push({
+        local: name,
+        exported: name
+      });
     }
-    return specifiers;
+    return {
+      kind,
+      specifiers,
+      source: sourceText,
+      span
+    };
   }
 
-  // Named exports: export { foo, bar as baz }
-  if (kind === 'named') {
-    const exportClause = node.children.find((c) => c.type === 'export_clause');
-    if (exportClause) {
-      for (const child of exportClause.children) {
-        if (child.type === 'export_specifier') {
-          const local = child.childForFieldName('name');
-          const exported = child.childForFieldName('alias') || local;
+  // Named exports: export { foo, bar }
+  const exportClause = node.children.find(c => c.type === 'export_clause');
+  if (exportClause) {
+    for (const child of exportClause.children) {
+      if (child.type === 'export_specifier') {
+        const nameNode = child.childForFieldName('name');
+        const aliasNode = child.childForFieldName('alias');
 
-          if (local) {
-            specifiers.push({
-              local: local.text,
-              exported: exported?.text || local.text,
-              typeOnly: false,
-            });
-          }
+        if (nameNode) {
+          specifiers.push({
+            local: nameNode.text,
+            exported: aliasNode ? aliasNode.text : nameNode.text
+          });
         }
       }
     }
   }
 
-  return specifiers;
+  return {
+    kind,
+    specifiers,
+    source: sourceText,
+    span
+  };
 }
 
 /**
- * Extract export statements from parsed tree
- *
- * @param tree - Tree-sitter parse tree
- * @param source - Source code text
- * @returns Array of export statements
+ * Extract name from a node (function, class, etc.)
  */
-export function extractExports(tree: TreeSitter.Tree, source: string): ExportStatement[] {
-  const exports: ExportStatement[] = [];
-  const cursor = tree.walk();
+function extractName(node: Parser.SyntaxNode): string {
+  const nameNode = node.childForFieldName('name');
+  if (nameNode) {
+    return nameNode.text;
+  }
+  return '<anonymous>';
+}
 
-  function visit() {
-    const node = cursor.currentNode;
+/**
+ * Extract all names from a declaration
+ */
+function extractNamesFromDeclaration(node: Parser.SyntaxNode): string[] {
+  const names: string[] = [];
 
-    if (isExportNode(node)) {
-      try {
-        exports.push(extractExport(node, source));
-        // Don't visit children of export nodes (avoid duplicate extraction)
-        return;
-      } catch (error) {
-        // Skip malformed exports
-        console.warn(`Failed to extract export at ${node.startPosition.row}: ${error}`);
+  function walk(n: Parser.SyntaxNode): void {
+    // Look for variable_declarator, function_declaration, class_declaration
+    if (n.type === 'variable_declarator') {
+      const nameNode = n.childForFieldName('name');
+      if (nameNode) {
+        names.push(nameNode.text);
+      }
+    } else if (n.type === 'function_declaration' || n.type === 'class_declaration') {
+      const nameNode = n.childForFieldName('name');
+      if (nameNode) {
+        names.push(nameNode.text);
       }
     }
 
-    // Visit children
-    if (cursor.gotoFirstChild()) {
-      do {
-        visit();
-      } while (cursor.gotoNextSibling());
-      cursor.gotoParent();
+    // Recursively walk children
+    for (const child of n.children) {
+      walk(child);
     }
   }
 
-  visit();
-  return exports;
+  walk(node);
+  return names;
+}
+
+/**
+ * Extract both imports and exports
+ * Convenience function to call both extractors
+ */
+export function extractImportsExports(
+  tree: Parser.Tree,
+  source: string,
+  builder: ASTDocBuilder
+): void {
+  extractImports(tree, source, builder);
+  extractExports(tree, source, builder);
 }

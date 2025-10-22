@@ -5,7 +5,7 @@
  * Tree-sitter grammar for parsing.
  */
 
-import type { Language } from '../../models/ParseResult.js';
+import type { Language } from '../../models/ASTDoc.js';
 
 /**
  * Detect language from file path extension

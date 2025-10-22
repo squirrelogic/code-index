@@ -5,7 +5,7 @@
  * Implements the core search logic with configurable weighting.
  */
 
-import type { ParseResult } from '../models/ParseResult.js';
+import type { ASTDoc } from '../models/ASTDoc.js';
 import { astToText, ngramSparse, sparseCosine, toCSR, fromCSR, type SparseVector, DEFAULT_NGRAM_CONFIG } from './sparse-vector.js';
 import { OnnxEmbedder } from './onnx-embedder.js';
 import { IndexStoreService, type IndexMetadata } from './index-store.js';
@@ -84,11 +84,11 @@ export class HybridIndex {
   /**
    * Add a file to the index (queues for batch processing)
    * @param filePath Path to the file
-   * @param parseResult ParseResult AST
+   * @param astDoc ASTDoc representation
    */
-  async add(filePath: string, parseResult: ParseResult): Promise<void> {
+  async add(filePath: string, astDoc: ASTDoc): Promise<void> {
     // Convert AST to text
-    const text = astToText(parseResult);
+    const text = astToText(astDoc);
 
     // Generate sparse vector immediately
     const sparseVector = ngramSparse(text, this.config.ngram);

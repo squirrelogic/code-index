@@ -8,6 +8,7 @@
 import { readFileSync } from 'fs';
 import type { CodeAnchor, CodePreview, PreviewConfig } from '../models/mcp-types.js';
 import { defaultPreviewConfig } from '../models/mcp-types.js';
+import type { Span } from '../models/ASTDoc.js';
 
 /**
  * Extract code preview from file content at a specific line
@@ -265,4 +266,48 @@ export function extractPreviewWithAnchor(
   const anchor = createAnchor(filePath, line, column);
 
   return { anchor, preview };
+}
+
+/**
+ * Extract code content from a file using span information
+ *
+ * @param filePath - Absolute file path
+ * @param span - Span object with line and column information
+ * @returns Extracted code as a string
+ * @throws Error if file doesn't exist or is binary
+ *
+ * @example
+ * ```typescript
+ * const code = extractCodeBySpan('/path/to/file.ts', {
+ *   startLine: 77,
+ *   endLine: 87,
+ *   startColumn: 0,
+ *   endColumn: 1,
+ *   startByte: 0,
+ *   endByte: 0
+ * });
+ * console.log(code); // Full function/class/symbol code
+ * ```
+ */
+export function extractCodeBySpan(filePath: string, span: Span): string {
+  // Read file content
+  const content = readFileSync(filePath);
+
+  // Check if binary
+  if (isBinaryFile(content)) {
+    throw new Error(`Cannot extract code from binary file: ${filePath}`);
+  }
+
+  const fileContent = content.toString('utf-8');
+  const lines = fileContent.split('\n');
+
+  // Ensure span is within bounds (convert to 0-based for array access)
+  const startLine = Math.max(0, span.startLine - 1);
+  const endLine = Math.min(lines.length - 1, span.endLine - 1);
+
+  // Extract lines from startLine to endLine (inclusive)
+  const codeLines = lines.slice(startLine, endLine + 1);
+
+  // Join and return
+  return codeLines.join('\n');
 }

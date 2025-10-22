@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { DatabaseService } from '../../services/database.js';
 import { IndexerService } from '../../services/indexer.js';
 import { HybridIndex } from '../../services/hybrid-index.js';
+import { SymbolIndex } from '../../services/symbol-index.js';
 import { ASTPersistenceService } from '../../services/ast-persistence.js';
 import { OnnxEmbedder } from '../../services/onnx-embedder.js';
 import { IndexStoreService } from '../../services/index-store.js';
@@ -28,12 +29,13 @@ interface RefreshCommandOptions {
 export function createRefreshCommand(): Command {
   return new Command('refresh')
     .description('Incrementally update index for changed files')
+    .argument('[files...]', 'Specific files to refresh (optional, refreshes all if omitted)')
     .option('-v, --verbose', 'Show detailed progress information')
     .option('-b, --batch-size <size>', 'Number of files to process per batch', '100')
     .option('-s, --follow-symlinks', 'Follow symbolic links during refresh')
     .option('-q, --quiet', 'Suppress warnings')
     .option('--format <type>', 'Output format (human or json)', 'human')
-    .action(async (options: RefreshCommandOptions) => {
+    .action(async (files: string[], options: RefreshCommandOptions) => {
       const cwd = process.cwd();
       const codeIndexDir = join(cwd, '.codeindex');
       const formatter = new OutputFormatter();
@@ -84,24 +86,34 @@ export function createRefreshCommand(): Command {
         const hybridIndex = new HybridIndex(embedder, indexStore);
         await hybridIndex.load();
 
+        const symbolIndex = new SymbolIndex();
+
         // Create indexer service
         const indexer = new IndexerService(
           cwd,
           database,
           hybridIndex,
+          symbolIndex,
           astPersistence,
           logger
         );
 
         // Start refresh
-        formatter.info('Starting incremental refresh', {
+        const isFileSpecific = files && files.length > 0;
+
+        formatter.info(isFileSpecific ? 'Starting file-specific refresh' : 'Starting incremental refresh', {
           path: cwd,
           batchSize: options.batchSize,
           existingFiles: existingCount,
+          ...(isFileSpecific && { targetFiles: files.length }),
         });
 
         if (options.verbose && options.format === 'human') {
-          console.log(chalk.blue('Scanning for changes...'));
+          if (isFileSpecific) {
+            console.log(chalk.blue(`Refreshing ${files.length} specific file(s)...`));
+          } else {
+            console.log(chalk.blue('Scanning for changes...'));
+          }
         }
 
         const startTime = Date.now();
@@ -110,11 +122,17 @@ export function createRefreshCommand(): Command {
             ? parseInt(options.batchSize)
             : options.batchSize || 100;
 
-        const result = await indexer.refreshIndex({
-          verbose: options.verbose,
-          batchSize,
-          followSymlinks: options.followSymlinks,
-        });
+        const result = isFileSpecific
+          ? await indexer.refreshFiles(files, {
+              verbose: options.verbose,
+              batchSize,
+              followSymlinks: options.followSymlinks,
+            })
+          : await indexer.refreshIndex({
+              verbose: options.verbose,
+              batchSize,
+              followSymlinks: options.followSymlinks,
+            });
 
         // Calculate statistics
         const duration = (Date.now() - startTime) / 1000;

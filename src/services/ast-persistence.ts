@@ -1,16 +1,16 @@
 /**
  * AST Persistence Service
  *
- * Manages storage and retrieval of ParseResult AST as JSON files.
+ * Manages storage and retrieval of ASTDoc as JSON files.
  * Provides fast, zero-overhead access to full AST data for search results.
  */
 
 import { promises as fs } from 'fs';
 import path from 'path';
-import type { ParseResult } from '../models/ParseResult.js';
+import type { ASTDoc } from '../models/ASTDoc.js';
 
 /**
- * Service for persisting ParseResult AST as JSON files
+ * Service for persisting ASTDoc as JSON files
  */
 export class ASTPersistenceService {
   private astDir: string;
@@ -42,32 +42,32 @@ export class ASTPersistenceService {
   }
 
   /**
-   * Write ParseResult to JSON file
+   * Write ASTDoc to JSON file
    * @param filePath Original source file path
-   * @param parseResult ParseResult to persist
+   * @param astDoc ASTDoc to persist
    */
-  async write(filePath: string, parseResult: ParseResult): Promise<void> {
+  async write(filePath: string, astDoc: ASTDoc): Promise<void> {
     const astPath = this.getAstPath(filePath);
 
     // Ensure directory exists
     await fs.mkdir(path.dirname(astPath), { recursive: true });
 
     // Write JSON with pretty printing for debuggability
-    const json = JSON.stringify(parseResult, null, 2);
+    const json = JSON.stringify(astDoc, null, 2);
     await fs.writeFile(astPath, json, 'utf-8');
   }
 
   /**
-   * Read ParseResult from JSON file
+   * Read ASTDoc from JSON file
    * @param filePath Original source file path
-   * @returns ParseResult or null if not found
+   * @returns ASTDoc or null if not found
    */
-  async read(filePath: string): Promise<ParseResult | null> {
+  async read(filePath: string): Promise<ASTDoc | null> {
     const astPath = this.getAstPath(filePath);
 
     try {
       const json = await fs.readFile(astPath, 'utf-8');
-      return JSON.parse(json) as ParseResult;
+      return JSON.parse(json) as ASTDoc;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return null;

@@ -5,8 +5,9 @@
  */
 
 import { Command } from 'commander';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, appendFileSync, copyFileSync, chmodSync, readdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { DatabaseService } from '../../services/database.js';
 import { downloadGteSmallModel } from '../../services/onnx-embedder.js';
 import { generateMCPConfig, mcpConfigToString } from '../../lib/mcp-config.js';
@@ -46,6 +47,7 @@ export function createInitCommand(): Command {
             files_created: result.filesCreated,
             model_downloaded: result.modelDownloaded,
             gitignore_updated: result.gitignoreUpdated,
+            hooks_installed: result.hooksInstalled,
           });
         } else {
           output.error('Failed to initialize code-index', result.error);
@@ -66,7 +68,128 @@ interface InitResult {
   filesCreated: string[];
   modelDownloaded: boolean;
   gitignoreUpdated: boolean;
+  hooksInstalled: number;
   error?: any;
+}
+
+/**
+ * Find the package root directory (where claude-hooks is located)
+ */
+function findPackageRoot(): string {
+  // Get the directory of this file
+  const currentFile = fileURLToPath(import.meta.url);
+  let currentDir = dirname(currentFile);
+
+  // Navigate up from dist/cli/commands to package root
+  // dist/cli/commands/init.js -> dist/cli/commands -> dist/cli -> dist -> package root
+  const packageRoot = join(currentDir, '..', '..', '..');
+
+  return packageRoot;
+}
+
+/**
+ * Install Claude Code hooks
+ */
+function installHooks(projectRoot: string, force: boolean): number {
+  const packageRoot = findPackageRoot();
+  const claudeHooksDir = join(packageRoot, 'claude-hooks');
+
+  // Check if claude-hooks directory exists in package
+  if (!existsSync(claudeHooksDir)) {
+    console.log('Note: claude-hooks directory not found in package, skipping hook installation');
+    return 0;
+  }
+
+  // Determine OS-specific hook directory
+  const platform = process.platform;
+  const hookSourceDir = platform === 'win32'
+    ? join(claudeHooksDir, 'hooks', 'windows')
+    : join(claudeHooksDir, 'hooks', 'unix');
+
+  if (!existsSync(hookSourceDir)) {
+    console.log(`Note: Hook directory not found for platform ${platform}, skipping`);
+    return 0;
+  }
+
+  // Create .claude/hooks directory
+  const claudeDir = join(projectRoot, '.claude');
+  const hooksTargetDir = join(claudeDir, 'hooks');
+
+  if (!existsSync(claudeDir)) {
+    mkdirSync(claudeDir, { recursive: true });
+  }
+  if (!existsSync(hooksTargetDir)) {
+    mkdirSync(hooksTargetDir, { recursive: true });
+  }
+
+  let hooksInstalled = 0;
+
+  // Copy hook files
+  const hookFiles = readdirSync(hookSourceDir).filter(f => f.endsWith('.sh') || f.endsWith('.ps1'));
+
+  for (const hookFile of hookFiles) {
+    const sourcePath = join(hookSourceDir, hookFile);
+    const targetPath = join(hooksTargetDir, hookFile);
+
+    // Skip if exists and not force
+    if (existsSync(targetPath) && !force) {
+      continue;
+    }
+
+    try {
+      copyFileSync(sourcePath, targetPath);
+
+      // Make executable on Unix
+      if (platform !== 'win32' && hookFile.endsWith('.sh')) {
+        chmodSync(targetPath, 0o755);
+      }
+
+      hooksInstalled++;
+    } catch (error) {
+      console.error(`Warning: Failed to install hook ${hookFile}:`, error);
+    }
+  }
+
+  // Copy common library for Unix
+  if (platform !== 'win32') {
+    const commonLibSource = join(claudeHooksDir, 'lib', 'unix', 'common.sh');
+    const commonLibTarget = join(hooksTargetDir, 'common.sh');
+
+    if (existsSync(commonLibSource)) {
+      try {
+        copyFileSync(commonLibSource, commonLibTarget);
+        chmodSync(commonLibTarget, 0o755);
+      } catch (error) {
+        console.error('Warning: Failed to install common.sh library:', error);
+      }
+    }
+  }
+
+  // Copy policies template if doesn't exist
+  const policiesSource = join(claudeHooksDir, 'templates', 'policies.json');
+  const policiesTarget = join(claudeDir, 'policies.json');
+
+  if (existsSync(policiesSource) && !existsSync(policiesTarget)) {
+    try {
+      copyFileSync(policiesSource, policiesTarget);
+    } catch (error) {
+      console.error('Warning: Failed to install policies.json:', error);
+    }
+  }
+
+  // Update or create settings.json to register hooks
+  const settingsSource = join(claudeHooksDir, 'templates', 'settings.json');
+  const settingsTarget = join(claudeDir, 'settings.json');
+
+  if (existsSync(settingsSource) && !existsSync(settingsTarget)) {
+    try {
+      copyFileSync(settingsSource, settingsTarget);
+    } catch (error) {
+      console.error('Warning: Failed to install settings.json:', error);
+    }
+  }
+
+  return hooksInstalled;
 }
 
 /**
@@ -123,6 +246,7 @@ async function initializeProject(
     filesCreated: [],
     modelDownloaded: false,
     gitignoreUpdated: false,
+    hooksInstalled: 0,
   };
 
   try {
@@ -221,6 +345,9 @@ async function initializeProject(
 
     // Update .gitignore with code-index paths
     result.gitignoreUpdated = updateGitignore(projectRoot);
+
+    // Install Claude Code hooks
+    result.hooksInstalled = installHooks(projectRoot, options.force || false);
 
     result.success = true;
     return result;

@@ -11,6 +11,7 @@ import chalk from 'chalk';
 import { DatabaseService } from '../../services/database.js';
 import { IndexerService } from '../../services/indexer.js';
 import { HybridIndex } from '../../services/hybrid-index.js';
+import { SymbolIndex } from '../../services/symbol-index.js';
 import { ASTPersistenceService } from '../../services/ast-persistence.js';
 import { OnnxEmbedder } from '../../services/onnx-embedder.js';
 import { IndexStoreService } from '../../services/index-store.js';
@@ -85,12 +86,14 @@ export function createIndexCommand(): Command {
         await astPersistence.initialize();
 
         const hybridIndex = new HybridIndex(embedder, indexStore);
+        const symbolIndex = new SymbolIndex();
 
         // Create indexer service
         const indexer = new IndexerService(
           cwd,
           database,
           hybridIndex,
+          symbolIndex,
           astPersistence,
           logger
         );

@@ -13,6 +13,7 @@ import { parse } from './parser/index.js';
 import { HybridIndex } from './hybrid-index.js';
 import { ASTPersistenceService } from './ast-persistence.js';
 import { GitignoreService } from './gitignore.js';
+import { SymbolIndex } from './symbol-index.js';
 
 export interface IndexOptions {
   verbose?: boolean;
@@ -42,6 +43,7 @@ export class IndexerService {
   private logger: Logger;
   private rootPath: string;
   private hybridIndex: HybridIndex;
+  private symbolIndex: SymbolIndex;
   private astPersistence: ASTPersistenceService;
   private gitignore: GitignoreService;
   private batchSize: number = 100;
@@ -56,12 +58,14 @@ export class IndexerService {
     rootPath: string,
     database: DatabaseService,
     hybridIndex: HybridIndex,
+    symbolIndex: SymbolIndex,
     astPersistence: ASTPersistenceService,
     logger: Logger
   ) {
     this.rootPath = rootPath;
     this.database = database;
     this.hybridIndex = hybridIndex;
+    this.symbolIndex = symbolIndex;
     this.astPersistence = astPersistence;
     this.logger = logger;
     this.gitignore = new GitignoreService(rootPath);
@@ -84,6 +88,7 @@ export class IndexerService {
     // Clear existing index
     this.database.clearFiles();
     await this.hybridIndex.clear();
+    this.symbolIndex.clear();
     await this.astPersistence.clear();
 
     // Set batch size for hybrid index
@@ -108,6 +113,112 @@ export class IndexerService {
       totalTime,
       filesPerSecond,
       errors: this.stats.errors,
+    };
+  }
+
+  /**
+   * Refresh specific files without directory scanning
+   */
+  public async refreshFiles(filePaths: string[], options: IndexOptions = {}): Promise<RefreshResult> {
+    const startTime = Date.now();
+    this.batchSize = options.batchSize || 100;
+
+    // Reset stats
+    const stats = {
+      filesIndexed: 0,
+      filesSkipped: 0,
+      filesUpdated: 0,
+      filesAdded: 0,
+      filesDeleted: 0,
+      errors: [] as string[],
+    };
+
+    // Get all existing files from database for mtime comparison
+    const existingFiles = this.database.getAllFiles();
+    const existingFileMap = new Map(existingFiles.map(f => [f.file_path, f.mtime_ms]));
+
+    // Process each file path
+    for (const filePath of filePaths) {
+      try {
+        // Normalize to relative path
+        const relativePath = path.isAbsolute(filePath)
+          ? path.relative(this.rootPath, filePath)
+          : filePath;
+
+        // Check if path should be ignored
+        if (this.gitignore.isIgnored(relativePath)) {
+          stats.filesSkipped++;
+          continue;
+        }
+
+        const fullPath = path.isAbsolute(filePath)
+          ? filePath
+          : path.join(this.rootPath, filePath);
+
+        // Check if file exists
+        try {
+          const fileStats = statSync(fullPath);
+
+          if (!fileStats.isFile()) {
+            stats.filesSkipped++;
+            continue;
+          }
+
+          const mtimeMs = fileStats.mtimeMs;
+          const existingMtime = existingFileMap.get(relativePath);
+
+          if (existingMtime === undefined) {
+            // New file
+            await this.indexFile(fullPath, mtimeMs);
+            stats.filesAdded++;
+            stats.filesIndexed++;
+          } else if (mtimeMs > existingMtime) {
+            // File was modified
+            await this.indexFile(fullPath, mtimeMs);
+            stats.filesUpdated++;
+            stats.filesIndexed++;
+          } else {
+            // File unchanged
+            stats.filesSkipped++;
+          }
+        } catch (error) {
+          // File doesn't exist - delete from index
+          if ((error as any).code === 'ENOENT') {
+            this.database.deleteFile(relativePath);
+            await this.hybridIndex.remove(relativePath);
+            this.symbolIndex.remove(relativePath);
+            await this.astPersistence.delete(relativePath);
+            stats.filesDeleted++;
+          } else {
+            stats.errors.push(`Failed to process ${relativePath}: ${error}`);
+          }
+        }
+      } catch (error) {
+        stats.errors.push(`Failed to refresh ${filePath}: ${error}`);
+      }
+    }
+
+    // Rebuild hybrid index if files were changed
+    if (stats.filesUpdated > 0 || stats.filesAdded > 0 || stats.filesDeleted > 0) {
+      if (this.logger) {
+        this.logger.info('Rebuilding hybrid search index...');
+      }
+      await this.hybridIndex.rebuild();
+    }
+
+    const totalTime = Date.now() - startTime;
+    const filesPerSecond =
+      stats.filesIndexed > 0 ? stats.filesIndexed / (totalTime / 1000) : 0;
+
+    return {
+      filesIndexed: stats.filesIndexed,
+      filesSkipped: stats.filesSkipped,
+      filesUpdated: stats.filesUpdated,
+      filesAdded: stats.filesAdded,
+      filesDeleted: stats.filesDeleted,
+      totalTime,
+      filesPerSecond,
+      errors: stats.errors,
     };
   }
 
@@ -144,6 +255,7 @@ export class IndexerService {
         // File was deleted
         this.database.deleteFile(filePath);
         await this.hybridIndex.remove(filePath);
+        this.symbolIndex.remove(filePath);
         await this.astPersistence.delete(filePath);
         stats.filesDeleted++;
       }
@@ -284,21 +396,24 @@ export class IndexerService {
       }
 
       // Parse file to get AST
-      const parseResult = await parse(filePath);
+      const astDoc = await parse(filePath);
 
-      if (!parseResult) {
+      if (!astDoc) {
         this.stats.filesSkipped++;
         return;
       }
 
       // 1. Write AST JSON
-      await this.astPersistence.write(relativePath, parseResult);
+      await this.astPersistence.write(relativePath, astDoc);
 
       // 2. Update mtime in database
       this.database.upsertFile(relativePath, mtimeMs);
 
       // 3. Add to hybrid index (queues for batch processing)
-      await this.hybridIndex.add(relativePath, parseResult);
+      await this.hybridIndex.add(relativePath, astDoc);
+
+      // 4. Add to symbol index
+      this.symbolIndex.add(relativePath, astDoc);
 
       this.stats.filesIndexed++;
 
