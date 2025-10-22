@@ -1,6 +1,6 @@
 {
-    "name": "@squirrelogic/code-index",
-    "version": "0.1.0",
+    "name": "@squirrelsoft/code-index",
+    "version": "0.1.1",
     "description": "A TypeScript/Node.js CLI tool for local code indexing and search using SQLite",
     "main": "dist/cli/index.js",
     "type": "module",
@@ -27,7 +27,7 @@
         "indexing",
         "developer-tools"
     ],
-    "author": "Squirrel Software",
+    "author": "SquirrelSoft LLC",
     "license": "MIT",
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.20.1",
@@ -55,6 +55,7 @@
     },
     "files": [
         "dist",
+        "sql",
         "README.md",
         "LICENSE"
     ],
@@ -63,6 +64,7 @@
         "registry": "https://registry.npmjs.org/"
     },
     "devDependencies": {
+        "@squirrelsoft/code-index": "^0.1.0",
         "@types/better-sqlite3": "^7.6.13",
         "@types/cli-progress": "^3.11.6",
         "@types/node": "^20.19.21",
