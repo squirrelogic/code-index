@@ -64,6 +64,11 @@ program.addCommand(createServeCommand());
 try {
   program.parse(process.argv);
 } catch (error: any) {
+  // Commander throws errors for --version and --help with exitOverride()
+  // These are "successful" exits with code 0, not actual errors
+  if (error.code === 'commander.version' || error.code === 'commander.helpDisplayed') {
+    process.exit(0);
+  }
   output.error(error.message);
   process.exit(1);
 }
