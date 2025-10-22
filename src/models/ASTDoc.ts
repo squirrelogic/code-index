@@ -389,7 +389,8 @@ export type Language =
   | 'php'
   | 'bash'
   | 'haskell'
-  | 'toml';
+  | 'toml'
+  | 'markdown';
 
 /**
  * Complete analysis output for a single file

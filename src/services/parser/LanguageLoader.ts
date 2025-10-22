@@ -50,6 +50,8 @@ export function detectLanguage(filePath: string): Language {
     'bash': 'bash',
     'hs': 'haskell',
     'toml': 'toml',
+    'md': 'markdown',
+    'markdown': 'markdown',
   };
 
   const language = languageMap[extension];
@@ -169,6 +171,11 @@ export async function loadGrammar(language: Language): Promise<any> {
       case 'toml': {
         const TOML = await import('tree-sitter-toml');
         grammar = TOML.default;
+        break;
+      }
+      case 'markdown': {
+        const Markdown = await import('tree-sitter-markdown');
+        grammar = Markdown.default.tree_sitter_markdown;
         break;
       }
       default: {
