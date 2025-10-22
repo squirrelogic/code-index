@@ -64,7 +64,7 @@
         "registry": "https://registry.npmjs.org/"
     },
     "devDependencies": {
-        "@squirrelsoft/code-index": "^0.1.0",
+        "@squirrelsoft/code-index": "^0.1.1",
         "@types/better-sqlite3": "^7.6.13",
         "@types/cli-progress": "^3.11.6",
         "@types/node": "^20.19.21",
