@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the **code-index** CLI tool project - a TypeScript/Node.js command-line application that provides local code indexing and search capabilities using SQLite. The tool is designed to work completely offline and uses project-relative paths.
 
-NPM Package: `@squirrelogic/code-index`
+NPM Package: `@squirrelsoft/code-index`
 
 ## Technology Stack
 

@@ -27,13 +27,13 @@ A fast, offline TypeScript/Node.js CLI tool for local code indexing and search u
 ### Global Installation (Recommended)
 
 ```bash
-npm install -g @squirrelogic/code-index
+npm install -g @squirrelsoft/code-index
 ```
 
 ### Local Installation
 
 ```bash
-npm install --save-dev @squirrelogic/code-index
+npm install --save-dev @squirrelsoft/code-index
 ```
 
 ## Quick Start
@@ -561,7 +561,7 @@ Code-index is designed to work seamlessly with Claude.ai through the Model Conte
 # GitHub Actions example
 - name: Index codebase
   run: |
-    npm install -g @squirrelogic/code-index
+    npm install -g @squirrelsoft/code-index
     code-index init
     code-index index
     code-index search "TODO" --json > todos.json
@@ -616,7 +616,7 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
 
 ## License
 
-MIT © [Squirrel Logic]
+MIT © [Squirrel Software]
 
 ## Changelog
 
