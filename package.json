@@ -1,6 +1,6 @@
 {
     "name": "@squirrelsoft/code-index",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "description": "A TypeScript/Node.js CLI tool for local code indexing and search using SQLite",
     "main": "dist/cli/index.js",
     "type": "module",
