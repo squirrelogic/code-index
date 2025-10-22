@@ -7,7 +7,9 @@ A fast, offline TypeScript/Node.js CLI tool for local code indexing and search u
 - 🚀 **Fast Indexing** - Process 1,000+ files per second
 - 🔍 **Instant Search** - Full-text and regex search with <100ms response time
 - 🧠 **Hybrid Search** - Combines lexical (BM25) + semantic (vector) search with configurable fusion
-- 💾 **Offline First** - All data stored locally in SQLite
+- 🌳 **AST-Based Symbol Index** - Tree-sitter powered parsing with full symbol extraction
+- 🔗 **Call Graph Tracking** - Navigate function calls, callers, and callees
+- 💾 **Offline First** - All data stored locally in SQLite + JSON
 - 🔄 **Incremental Updates** - Refresh only changed files
 - 👀 **File Watcher** - Real-time index updates with debounced change detection
 - 🪝 **Git Hooks** - Automatic indexing after merge, checkout, and rebase
@@ -43,9 +45,10 @@ code-index init
 ```
 
 This creates:
-- `.codeindex/` - Database and logs directory
+- `.codeindex/` - Database, AST files, and logs directory
 - `.claude/` - Configuration directory for Claude integration
 - `.mcp.json` - Model Context Protocol configuration
+- Updates `.gitignore` to exclude code-index artifacts
 
 2. Index your codebase:
 
@@ -272,14 +275,21 @@ code-index metrics --json > performance-report.json
 Start the MCP (Model Context Protocol) server for code intelligence. The server listens on stdio for JSON-RPC 2.0 requests and provides 8 tool functions for AI assistants to navigate and understand codebases.
 
 **Available Tools:**
-- `search` - Search codebase for text patterns
-- `find_def` - Find symbol definitions
-- `find_refs` - Find symbol references
-- `callers` - Find function callers
-- `callees` - Find function callees
-- `open_at` - Open file at specific line
-- `refresh` - Refresh code index
-- `symbols` - List symbols in file or codebase
+- `search` - Hybrid semantic + lexical search across codebase
+- `find_def` - Find symbol definitions with exact name matching (fast path via symbol index)
+- `find_refs` - Find all references to a symbol (imports, exports, calls)
+- `callers` - Find all functions/methods that call a given function
+- `callees` - Find all functions/methods called by a given function
+- `open_at` - Open file at specific line with context
+- `refresh` - Incremental index update (automatically reloads symbol index)
+- `symbols` - List all symbols in a file or entire codebase
+
+**Symbol Index Features:**
+- Exact symbol name matching (O(1) lookup via hash map)
+- Prefix, substring, and fuzzy matching (k-gram indexed)
+- Full AST information including signatures, call graphs, and line ranges
+- Automatically populated on server start from persisted AST files
+- Re-initialized after refresh operations for immediate availability
 
 **Options:**
 - `-p, --project <path>` - Project root directory (defaults to current directory)
@@ -321,9 +331,12 @@ For Claude Code integration, the server will be automatically detected and avail
 
 **Notes:**
 - Server uses stdio transport (stdin/stdout for JSON-RPC messages)
-- All responses include file anchors (`file:line:col`) and code previews
+- All responses include file anchors (`file:line:col`) with precise symbol locations
+- Code previews extracted from source files or AST spans
+- Symbol definitions include full metadata: signatures, call graphs, line ranges, and kind (function, class, interface, etc.)
+- Symbol index loads on first request (~100ms for 1000 files)
 - Supports concurrent requests (handles 50+ simultaneous queries)
-- Gracefully handles SIGTERM/SIGINT for clean shutdown
+- Gracefully handles SIGTERM/SIGINT for clean shutdown with in-flight request completion
 
 ### `code-index uninstall`
 
@@ -353,13 +366,73 @@ By default, files larger than 10MB are skipped during indexing to maintain perfo
 
 Code-index automatically detects and tags files with their programming language based on extension:
 
-- JavaScript/TypeScript (`.js`, `.jsx`, `.ts`, `.tsx`)
-- Python (`.py`)
+- JavaScript/TypeScript (`.js`, `.jsx`, `.ts`, `.tsx`) - **AST parsing with Tree-sitter**
+- Python (`.py`) - **AST parsing with Tree-sitter**
 - Java (`.java`)
 - C/C++ (`.c`, `.cpp`, `.h`, `.hpp`)
 - Go (`.go`)
 - Rust (`.rs`)
 - And 40+ more languages
+
+**AST Parsing:**
+Languages with AST parsing get full symbol extraction including:
+- Function/method definitions with signatures
+- Class/interface/type definitions
+- Import/export statements
+- Call graph relationships (caller/callee tracking)
+- Precise line/column location spans
+
+## Symbol Index
+
+The symbol index provides fast, precise symbol lookup for code navigation. Built on Tree-sitter parsing and k-gram indexing, it enables instant "go to definition" and call graph traversal.
+
+### Features
+
+- **Exact Matching** - O(1) hash-based lookup for symbol names
+- **Fuzzy Matching** - K-gram indexed prefix, substring, and edit-distance matching
+- **Full Metadata** - Function signatures, line ranges, call graphs
+- **Multiple Symbol Types** - Functions, classes, interfaces, types, enums, constants, components
+- **Call Graphs** - Bidirectional tracking (callers ↔ callees)
+- **Import/Export Tracking** - Full dependency graph
+
+### Supported Symbol Types
+
+| Type | Languages | Metadata |
+|------|-----------|----------|
+| Functions | TS/JS, Python | Signature, parameters, return type, calls, called_by |
+| Classes | TS/JS, Python | Methods, properties, extends |
+| Interfaces | TS/JS | Properties, methods, extends |
+| Type Aliases | TS/JS | Type definition |
+| Enums | TS/JS | Members |
+| Constants | TS/JS, Python | Type, value |
+| Components | TS/JS/JSX | Props, hooks |
+
+### Usage via MCP
+
+```bash
+# Start MCP server
+code-index serve
+
+# From AI assistant (e.g., Claude Code):
+# Find definition
+mcp__code-index__find_def(symbol: "findPackageRoot")
+
+# Find who calls this function
+mcp__code-index__callers(symbol: "findPackageRoot")
+
+# Find what this function calls
+mcp__code-index__callees(symbol: "findPackageRoot")
+
+# List all symbols in file
+mcp__code-index__symbols(path: "src/services/indexer.ts")
+```
+
+### Performance
+
+- **Exact Match**: <10ms
+- **Fuzzy Match**: <50ms (1000 symbols)
+- **Load Time**: ~100ms for 1000 files
+- **Memory**: ~1MB per 1000 symbols
 
 ## Hybrid Search
 
@@ -455,10 +528,22 @@ All data is stored locally in your project:
 
 ```
 .codeindex/
-├── index.db       # SQLite database with FTS5
-└── logs/         # JSON lines log files
-    └── *.jsonl
+├── index.db           # SQLite database with hybrid index (embeddings + sparse vectors)
+├── ast/              # Parsed AST files (JSON) - one per source file
+│   └── *.json        # Symbol definitions, call graphs, imports/exports
+├── models/           # ONNX embedding models for semantic search
+│   └── gte-small.onnx
+└── logs/             # JSON lines log files
+    ├── mcp-server.log              # MCP server activity
+    └── search-performance.jsonl    # Search metrics
 ```
+
+**AST Files:**
+- One JSON file per source file, named using encoded path (e.g., `src_services_indexer.ts.json`)
+- Contains extracted symbols: functions, classes, interfaces, types, enums, constants, components
+- Includes call graphs (what each function calls and is called by)
+- Import/export tracking for dependency analysis
+- Precise source location spans (line/column ranges)
 
 ## Integration
 
@@ -510,6 +595,21 @@ Set the `DEBUG` environment variable for detailed logging:
 DEBUG=code-index code-index index
 ```
 
+### MCP Server Issues
+
+1. **"Symbol not found" after indexing**
+   - The MCP server needs to be restarted to load new symbols
+   - Or use the `refresh` MCP tool which automatically reloads the symbol index
+
+2. **MCP server logs location**
+   - Check `.codeindex/logs/mcp-server.log` for server activity
+   - Logs include symbol index statistics on load
+
+3. **Symbol index not loading**
+   - Ensure `.codeindex/ast/` directory contains JSON files
+   - Check MCP logs for "Symbol index loaded: X symbols from Y files"
+   - Verify files were indexed with `code-index index`
+
 ## Contributing
 
 Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
@@ -520,23 +620,33 @@ MIT © [Squirrel Logic]
 
 ## Changelog
 
-### 4.0.0 (MCP Server Integration)
+### 4.0.0 (MCP Server Integration + AST Symbol Index)
 - **New Features:**
   - 🤖 **MCP Server** - Model Context Protocol server for AI assistant integration
+  - 🌳 **AST-Based Symbol Index** - Tree-sitter powered parsing with k-gram indexing
   - 8 tool functions: search, find_def, find_refs, callers, callees, open_at, refresh, symbols
   - All responses include file anchors (file:line:col) and code previews
   - Optional authentication via CODE_INDEX_AUTH_TOKEN environment variable
   - Concurrent request handling (50+ simultaneous queries)
   - Graceful shutdown with cleanup
+  - Auto-reload symbol index after refresh operations
+- **Symbol Index:**
+  - In-memory symbol index for O(1) exact matching
+  - K-gram indexing for prefix, substring, and fuzzy search
+  - Full AST metadata: signatures, call graphs, line ranges
+  - Supports functions, classes, interfaces, types, enums, constants, components
+  - Automatic population from persisted AST files on server start
 - **Commands:**
   - `serve` - Start MCP server on stdio transport
 - **Integration:**
   - `.mcp.json` configuration file support
   - Claude Code tool picker integration
   - VSCode-compatible file anchors
+  - Auto-updates `.gitignore` during init
 - **Performance:**
+  - Symbol lookup <10ms (exact match)
   - Search <500ms for <100k files
-  - Symbol navigation <200ms
+  - Symbol index load ~100ms for 1000 files
   - Prepared statement caching for optimal performance
   - WAL mode for concurrent reads
 

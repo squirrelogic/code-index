@@ -31,10 +31,13 @@ import {
 } from '../models/mcp-types.js';
 import {
   extractPreviewFromFile,
-  createAnchor
+  createAnchor,
+  extractCodeBySpan
 } from './preview-formatter.js';
+import { findSymbol } from '../models/ASTDoc.js';
 import { SearchService } from './searcher.js';
 import { HybridIndex } from './hybrid-index.js';
+import { SymbolIndex } from './symbol-index.js';
 import { ASTPersistenceService } from './ast-persistence.js';
 import { OnnxEmbedder } from './onnx-embedder.js';
 import { IndexStoreService } from './index-store.js';
@@ -82,7 +85,6 @@ export class MCPServer {
 
     const indexPath = join(this.projectRoot, '.codeindex');
     const modelPath = join(indexPath, 'models', 'gte-small.onnx');
-    const astPath = join(indexPath, 'ast');
 
     // Check if model exists
     if (!existsSync(modelPath)) {
@@ -100,11 +102,28 @@ export class MCPServer {
     this.hybridIndex = new HybridIndex(embedder, store);
     await this.hybridIndex.load();
 
-    // Initialize AST persistence
-    const astPersistence = new ASTPersistenceService(astPath);
+    // Initialize AST persistence (pass base directory, it will add /ast)
+    const astPersistence = new ASTPersistenceService(indexPath);
+
+    // Initialize symbol index
+    const symbolIndex = new SymbolIndex();
+
+    // Populate symbol index with all AST files
+    this.log('info', 'Loading symbol index...');
+    const allFiles = await astPersistence.listAll();
+    let symbolCount = 0;
+    for (const filePath of allFiles) {
+      const astDoc = await astPersistence.read(filePath);
+      if (astDoc) {
+        symbolIndex.add(filePath, astDoc);
+        symbolCount++;
+      }
+    }
+    const stats = symbolIndex.getStats();
+    this.log('info', `Symbol index loaded: ${stats.numSymbols} symbols from ${symbolCount} files`);
 
     // Initialize search service
-    this.searchService = new SearchService(this.hybridIndex, astPersistence);
+    this.searchService = new SearchService(this.hybridIndex, symbolIndex, astPersistence);
 
     this.log('info', 'Search services initialized');
   }
@@ -305,7 +324,7 @@ export class MCPServer {
     try {
       const results = await this.searchService!.search(validated.query, {
         limit: validated.limit,
-        includeAst: false // Don't include full AST in MCP responses
+        includeAst: true // Include AST for better context
       });
 
       const formattedResults = results.map(result => {
@@ -315,14 +334,18 @@ export class MCPServer {
         const line = parseInt(anchorParts[1] || '1');
         const column = anchorParts[2] ? parseInt(anchorParts[2]) : undefined;
 
-        // Get file preview
-        const preview = existsSync(file)
-          ? extractPreviewFromFile(file, line, 3)
-          : { lines: [], startLine: line };
+        // Try to extract code context (10 lines around the match)
+        let code: string | undefined;
+        if (existsSync(file)) {
+          const preview = extractPreviewFromFile(file, line, 10);
+          code = preview.lines.join('\n');
+        }
 
         return {
-          anchor: { file, line, column },
-          preview,
+          file,
+          line,
+          column,
+          code,
           score: result.score
         };
       });
@@ -331,7 +354,7 @@ export class MCPServer {
         query: validated.query,
         total: formattedResults.length,
         returned: formattedResults.length,
-        results: formattedResults
+        results: formattedResults as any
       };
 
       return {
@@ -351,17 +374,96 @@ export class MCPServer {
   private async handleFindDefinition(args: unknown): Promise<ToolResponse> {
     const validated = FindDefinitionInputSchema.parse(args);
 
-    // Symbol-based tools are not available in hybrid search architecture
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          symbol: validated.symbol,
-          found: false,
-          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
-        }, null, 2)
-      }]
-    };
+    await this.initializeServices();
+
+    try {
+      const results = await this.searchService!.findDefinition(validated.symbol, 10);
+
+      if (results.length === 0) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              symbol: validated.symbol,
+              found: false,
+              message: `No definition found for symbol: ${validated.symbol}`
+            }, null, 2)
+          }]
+        };
+      }
+
+      const formattedResults = results.map(result => {
+        const anchorParts = result.anchor.split(':');
+        const file = anchorParts[0] || result.filePath;
+        const line = parseInt(anchorParts[1] || '1');
+        const column = anchorParts[2] ? parseInt(anchorParts[2]) : undefined;
+
+        // Find the symbol in the AST to get full information
+        const symbolInfo = result.ast ? findSymbol(result.ast, validated.symbol) : null;
+
+        let code: string | undefined;
+        let lineRange: string | undefined;
+        let signature: string | undefined;
+        let kind: string | undefined;
+        let calls: string[] | undefined;
+        let called_by: string[] | undefined;
+
+        if (symbolInfo && symbolInfo.data && typeof symbolInfo.data === 'object') {
+          kind = symbolInfo.kind;
+          const symbolData = symbolInfo.data as any;
+
+          // Extract code using span
+          if (symbolData.span && existsSync(file)) {
+            try {
+              code = extractCodeBySpan(file, symbolData.span);
+              lineRange = `${symbolData.span.startLine}-${symbolData.span.endLine}`;
+            } catch (e) {
+              // Fall back to preview if extraction fails
+            }
+          }
+
+          // Extract signature
+          signature = symbolData.signature;
+
+          // Extract call graph info
+          calls = symbolData.calls;
+          called_by = symbolData.called_by;
+        }
+
+        // Fallback to preview if no code extracted
+        if (!code && existsSync(file)) {
+          const preview = extractPreviewFromFile(file, line, 10);
+          code = preview.lines.join('\n');
+        }
+
+        return {
+          file,
+          lineRange: lineRange || `${line}`,
+          line,
+          column,
+          code,
+          kind,
+          signature,
+          calls,
+          called_by,
+          score: result.score
+        };
+      });
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            symbol: validated.symbol,
+            found: true,
+            total: formattedResults.length,
+            definitions: formattedResults
+          }, null, 2)
+        }]
+      };
+    } catch (error: any) {
+      throw new McpError(-32603, `Find definition failed: ${error.message}`);
+    }
   }
 
   /**
@@ -370,17 +472,70 @@ export class MCPServer {
   private async handleFindReferences(args: unknown): Promise<ToolResponse> {
     const validated = FindReferencesInputSchema.parse(args);
 
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          symbol: validated.symbol,
-          total: 0,
-          references: [],
-          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
-        }, null, 2)
-      }]
-    };
+    await this.initializeServices();
+
+    try {
+      const results = await this.searchService!.findReferences(validated.symbol, 50);
+
+      const formattedResults = results.map(result => {
+        const anchorParts = result.anchor.split(':');
+        const file = anchorParts[0] || result.filePath;
+        const line = parseInt(anchorParts[1] || '1');
+        const column = anchorParts[2] ? parseInt(anchorParts[2]) : undefined;
+
+        // Extract code context (10 lines around reference)
+        let code: string | undefined;
+        if (existsSync(file)) {
+          const preview = extractPreviewFromFile(file, line, 10);
+          code = preview.lines.join('\n');
+        }
+
+        // Determine reference type (call, import, export, definition)
+        let referenceType = 'reference';
+        if (result.ast) {
+          const isDefined =
+            (result.ast.functions && validated.symbol in result.ast.functions) ||
+            (result.ast.classes && validated.symbol in result.ast.classes) ||
+            (result.ast.interfaces && validated.symbol in result.ast.interfaces);
+
+          if (isDefined) {
+            referenceType = 'definition';
+          } else if (result.ast.imports?.some(imp =>
+            imp.specifiers.some(spec => spec.imported === validated.symbol || spec.local === validated.symbol)
+          )) {
+            referenceType = 'import';
+          } else if (result.ast.exports?.some(exp =>
+            exp.specifiers.some(spec => spec.local === validated.symbol || spec.exported === validated.symbol)
+          )) {
+            referenceType = 'export';
+          } else {
+            referenceType = 'call';
+          }
+        }
+
+        return {
+          file,
+          line,
+          column,
+          code,
+          referenceType,
+          score: result.score
+        };
+      });
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            symbol: validated.symbol,
+            total: formattedResults.length,
+            references: formattedResults
+          }, null, 2)
+        }]
+      };
+    } catch (error: any) {
+      throw new McpError(-32603, `Find references failed: ${error.message}`);
+    }
   }
 
   /**
@@ -389,17 +544,99 @@ export class MCPServer {
   private async handleCallers(args: unknown): Promise<ToolResponse> {
     const validated = CallersInputSchema.parse(args);
 
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          symbol: validated.symbol,
-          total: 0,
-          callers: [],
-          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
-        }, null, 2)
-      }]
-    };
+    await this.initializeServices();
+
+    try {
+      const results = await this.searchService!.findCallers(validated.symbol, 50);
+
+      const formattedResults = results.map(result => {
+        const anchorParts = result.anchor.split(':');
+        const file = anchorParts[0] || result.filePath;
+        const line = parseInt(anchorParts[1] || '1');
+        const column = anchorParts[2] ? parseInt(anchorParts[2]) : undefined;
+
+        let code: string | undefined;
+        let callerName: string | undefined;
+        let lineRange: string | undefined;
+        let signature: string | undefined;
+
+        // Find the calling function/method in the AST
+        if (result.ast) {
+          // Check functions
+          if (result.ast.functions) {
+            for (const [funcName, func] of Object.entries(result.ast.functions)) {
+              if (func.calls?.includes(validated.symbol)) {
+                callerName = funcName;
+                signature = func.signature;
+                if (func.span && existsSync(file)) {
+                  try {
+                    code = extractCodeBySpan(file, func.span);
+                    lineRange = `${func.span.startLine}-${func.span.endLine}`;
+                  } catch (e) {
+                    // Fall back to preview
+                  }
+                }
+                break;
+              }
+            }
+          }
+
+          // Check methods
+          if (!callerName && result.ast.classes) {
+            for (const [className, cls] of Object.entries(result.ast.classes)) {
+              if (cls.methods) {
+                for (const [methodName, method] of Object.entries(cls.methods)) {
+                  if (method.calls?.includes(validated.symbol)) {
+                    callerName = `${className}.${methodName}`;
+                    signature = method.signature;
+                    if (method.span && existsSync(file)) {
+                      try {
+                        code = extractCodeBySpan(file, method.span);
+                        lineRange = `${method.span.startLine}-${method.span.endLine}`;
+                      } catch (e) {
+                        // Fall back to preview
+                      }
+                    }
+                    break;
+                  }
+                }
+              }
+              if (callerName) break;
+            }
+          }
+        }
+
+        // Fallback to preview if no code extracted
+        if (!code && existsSync(file)) {
+          const preview = extractPreviewFromFile(file, line, 10);
+          code = preview.lines.join('\n');
+        }
+
+        return {
+          file,
+          lineRange: lineRange || `${line}`,
+          line,
+          column,
+          callerName,
+          signature,
+          code,
+          score: result.score
+        };
+      });
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            symbol: validated.symbol,
+            total: formattedResults.length,
+            callers: formattedResults
+          }, null, 2)
+        }]
+      };
+    } catch (error: any) {
+      throw new McpError(-32603, `Find callers failed: ${error.message}`);
+    }
   }
 
   /**
@@ -408,17 +645,120 @@ export class MCPServer {
   private async handleCallees(args: unknown): Promise<ToolResponse> {
     const validated = CalleesInputSchema.parse(args);
 
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          symbol: validated.symbol,
-          total: 0,
-          callees: [],
-          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
-        }, null, 2)
-      }]
-    };
+    await this.initializeServices();
+
+    try {
+      const calleeResults = await this.searchService!.findCallees(validated.symbol);
+
+      // Format each callee with full information
+      const formattedCallees = calleeResults.map(result => {
+        const anchorParts = result.anchor.split(':');
+        const file = anchorParts[0] || result.filePath;
+        const line = parseInt(anchorParts[1] || '1');
+        const column = anchorParts[2] ? parseInt(anchorParts[2]) : undefined;
+
+        // Find the callee symbol in the AST
+        let calleeName: string | undefined;
+        let code: string | undefined;
+        let lineRange: string | undefined;
+        let signature: string | undefined;
+        let kind: string | undefined;
+
+        if (result.ast) {
+          // Try to find the symbol at the anchor location
+          // First check functions
+          if (result.ast.functions) {
+            for (const [funcName, func] of Object.entries(result.ast.functions)) {
+              if (func.span.startLine === line) {
+                calleeName = funcName;
+                kind = 'function';
+                signature = func.signature;
+                if (existsSync(file)) {
+                  try {
+                    code = extractCodeBySpan(file, func.span);
+                    lineRange = `${func.span.startLine}-${func.span.endLine}`;
+                  } catch (e) {
+                    // Fall back to preview
+                  }
+                }
+                break;
+              }
+            }
+          }
+
+          // Check classes/methods
+          if (!calleeName && result.ast.classes) {
+            for (const [className, cls] of Object.entries(result.ast.classes)) {
+              if (cls.span.startLine === line) {
+                calleeName = className;
+                kind = 'class';
+                if (existsSync(file)) {
+                  try {
+                    code = extractCodeBySpan(file, cls.span);
+                    lineRange = `${cls.span.startLine}-${cls.span.endLine}`;
+                  } catch (e) {
+                    // Fall back to preview
+                  }
+                }
+                break;
+              }
+
+              // Check methods
+              if (cls.methods) {
+                for (const [methodName, method] of Object.entries(cls.methods)) {
+                  if (method.span.startLine === line) {
+                    calleeName = `${className}.${methodName}`;
+                    kind = 'method';
+                    signature = method.signature;
+                    if (existsSync(file)) {
+                      try {
+                        code = extractCodeBySpan(file, method.span);
+                        lineRange = `${method.span.startLine}-${method.span.endLine}`;
+                      } catch (e) {
+                        // Fall back to preview
+                      }
+                    }
+                    break;
+                  }
+                }
+              }
+              if (calleeName) break;
+            }
+          }
+        }
+
+        // Fallback to preview if no code extracted
+        if (!code && existsSync(file)) {
+          const preview = extractPreviewFromFile(file, line, 10);
+          code = preview.lines.join('\n');
+        }
+
+        return {
+          file,
+          lineRange: lineRange || `${line}`,
+          line,
+          column,
+          calleeName,
+          kind,
+          signature,
+          code,
+          score: result.score
+        };
+      });
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            symbol: validated.symbol,
+            total: formattedCallees.length,
+            callees: formattedCallees
+          }, null, 2)
+        }]
+      };
+    } catch (error: any) {
+      throw new McpError(-32603, `Find callees failed: ${error.message}`);
+    }
   }
 
   /**
@@ -477,22 +817,75 @@ export class MCPServer {
    * Handle refresh tool
    */
   private async handleRefresh(args: unknown): Promise<ToolResponse> {
-    RefreshInputSchema.parse(args); // Validate but don't use yet
+    const validated = RefreshInputSchema.parse(args);
 
     const startTime = Date.now();
-    const errors: Array<{ path: string; error: string }> = [];
 
     try {
-      // TODO: Implement actual refresh logic using IndexerService
-      // For now, return a placeholder response
+      // Import required services
+      const { DatabaseService } = await import('./database.js');
+      const { IndexerService } = await import('./indexer.js');
+      const { Logger } = await import('../cli/utils/logger.js');
+
+      // Initialize database
+      const dbPath = join(this.projectRoot, '.codeindex', 'index.db');
+      const database = new DatabaseService(dbPath);
+
+      // Initialize logger
+      const logger = new Logger(this.projectRoot);
+
+      // Initialize AST persistence
+      const { ASTPersistenceService } = await import('./ast-persistence.js');
+      const astPersistence = new ASTPersistenceService(join(this.projectRoot, '.codeindex'));
+      await astPersistence.initialize();
+
+      // Initialize hybrid index if not already initialized
+      if (!this.hybridIndex) {
+        await this.initializeServices();
+      }
+
+      // Create symbol index
+      const symbolIndex = new SymbolIndex();
+
+      // Create indexer service
+      const indexer = new IndexerService(
+        this.projectRoot,
+        database,
+        this.hybridIndex!,
+        symbolIndex,
+        astPersistence,
+        logger
+      );
+
+      // Refresh based on whether paths were provided
+      const result = validated.paths && validated.paths.length > 0
+        ? await indexer.refreshFiles(validated.paths)
+        : await indexer.refreshIndex();
 
       const duration = Date.now() - startTime;
 
+      // Convert errors to expected format
+      const errors = result.errors.map(errMsg => {
+        // Try to extract path from error message
+        const match = errMsg.match(/^Failed to (?:refresh|process) (.+?):/);
+        return {
+          path: (match && match[1]) || 'unknown',
+          error: errMsg
+        };
+      });
+
       const output: RefreshOutput = {
-        refreshed: 0,
+        refreshed: result.filesUpdated + result.filesAdded,
         duration,
         errors
       };
+
+      // Cleanup
+      database.close();
+
+      // Force re-initialization of search services to reload the symbol index
+      this.searchService = null;
+      this.log('info', 'Search services cleared, will reload on next request');
 
       return {
         content: [{
@@ -511,17 +904,40 @@ export class MCPServer {
   private async handleSymbols(args: unknown): Promise<ToolResponse> {
     const validated = SymbolsInputSchema.parse(args);
 
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          path: validated.path,
-          total: 0,
-          symbols: [],
-          message: 'Symbol-based queries are not supported in the hybrid search architecture. Use the search tool instead.'
-        }, null, 2)
-      }]
-    };
+    await this.initializeServices();
+
+    try {
+      const results = await this.searchService!.listSymbols(validated.path);
+
+      let allSymbols: Array<{
+        name: string;
+        kind: string;
+        line: number;
+        signature?: string;
+        file?: string;
+      }> = [];
+
+      for (const result of results) {
+        const fileSymbols = result.symbols.map(s => ({
+          ...s,
+          file: result.file
+        }));
+        allSymbols.push(...fileSymbols);
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            path: validated.path,
+            total: allSymbols.length,
+            symbols: allSymbols
+          }, null, 2)
+        }]
+      };
+    } catch (error: any) {
+      throw new McpError(-32603, `List symbols failed: ${error.message}`);
+    }
   }
 
   /**
