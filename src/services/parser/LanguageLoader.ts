@@ -29,6 +29,27 @@ export function detectLanguage(filePath: string): Language {
     'ts': 'typescript',
     'tsx': 'tsx',         // Separate TSX grammar in tree-sitter-typescript package
     'py': 'python',
+    'json': 'json',
+    'html': 'html',
+    'htm': 'html',
+    'go': 'go',
+    'rs': 'rust',
+    'java': 'java',
+    'c': 'c',
+    'h': 'c',             // C header files
+    'cpp': 'cpp',
+    'cc': 'cpp',
+    'cxx': 'cpp',
+    'hpp': 'cpp',
+    'hh': 'cpp',
+    'hxx': 'cpp',
+    'rb': 'ruby',
+    'cs': 'csharp',
+    'php': 'php',
+    'sh': 'bash',
+    'bash': 'bash',
+    'hs': 'haskell',
+    'toml': 'toml',
   };
 
   const language = languageMap[extension];
@@ -83,6 +104,71 @@ export async function loadGrammar(language: Language): Promise<any> {
       case 'python': {
         const Python = await import('tree-sitter-python');
         grammar = Python.default;
+        break;
+      }
+      case 'json': {
+        const JSON = await import('tree-sitter-json');
+        grammar = JSON.default;
+        break;
+      }
+      case 'html': {
+        const HTML = await import('tree-sitter-html');
+        grammar = HTML.default;
+        break;
+      }
+      case 'go': {
+        const Go = await import('tree-sitter-go');
+        grammar = Go.default;
+        break;
+      }
+      case 'rust': {
+        const Rust = await import('tree-sitter-rust');
+        grammar = Rust.default;
+        break;
+      }
+      case 'java': {
+        const Java = await import('tree-sitter-java');
+        grammar = Java.default;
+        break;
+      }
+      case 'c': {
+        const C = await import('tree-sitter-c');
+        grammar = C.default;
+        break;
+      }
+      case 'cpp': {
+        const CPP = await import('tree-sitter-cpp');
+        grammar = CPP.default;
+        break;
+      }
+      case 'ruby': {
+        const Ruby = await import('tree-sitter-ruby');
+        grammar = Ruby.default;
+        break;
+      }
+      case 'csharp': {
+        const CSharp = await import('tree-sitter-c-sharp');
+        grammar = CSharp.default;
+        break;
+      }
+      case 'php': {
+        const PHP = await import('tree-sitter-php');
+        grammar = PHP.default.php;
+        break;
+      }
+      case 'bash': {
+        const Bash = await import('tree-sitter-bash');
+        grammar = Bash.default;
+        break;
+      }
+      case 'haskell': {
+        const Haskell = await import('tree-sitter-haskell');
+        grammar = Haskell.default;
+        break;
+      }
+      case 'toml': {
+        const TOML = await import('tree-sitter-toml');
+        grammar = TOML.default;
         break;
       }
       default: {

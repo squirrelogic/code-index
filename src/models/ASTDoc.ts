@@ -371,7 +371,25 @@ export interface Component {
 /**
  * Supported language variants
  */
-export type Language = 'javascript' | 'typescript' | 'jsx' | 'tsx' | 'python';
+export type Language =
+  | 'javascript'
+  | 'typescript'
+  | 'jsx'
+  | 'tsx'
+  | 'python'
+  | 'json'
+  | 'html'
+  | 'go'
+  | 'rust'
+  | 'java'
+  | 'c'
+  | 'cpp'
+  | 'ruby'
+  | 'csharp'
+  | 'php'
+  | 'bash'
+  | 'haskell'
+  | 'toml';
 
 /**
  * Complete analysis output for a single file
